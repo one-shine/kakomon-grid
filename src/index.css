@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+/* ブランド/デザイントークン(UXレビュー 2026-06-17 反映)
+   - 競合はExcel自作テンプレ。「1指標(差・伸び)を主役化＋階層」で市場優位を取る。
+   - 色は機能(信号=得点率/合否)にのみ。地はneutral-50、カードは白＋影で浮かせ階層を作る。 */
+@theme {
+  --color-brand: #2347b8;       /* 藍:信頼・学習感。CTA/アクセント限定 */
+  --color-brand-ink: #1b3a99;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Segoe UI", sans-serif;
+  background: #f5f5f7; /* neutral-50相当:白カードを浮かせる地 */
+  color: #1d1d1f;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 数値は全面 tabular-nums(数字のガタつき防止=数値アプリの基本作法) */
+.nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .anim-rise {
+    animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
