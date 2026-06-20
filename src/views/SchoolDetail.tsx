@@ -3,6 +3,7 @@ import { useNav } from "@/store/useNav";
 import { useToast } from "@/store/useToast";
 import { Button } from "@/components/ui/button";
 import { TrendChart, type TrendPoint } from "@/components/ui/TrendChart";
+import { ScoreGrid } from "@/components/ui/ScoreGrid";
 import { buildGrid, subjectRates, weakestSubject, buildShareText, computeGap, findReference, type GapStatus } from "@/lib/logic";
 import type { Attempt, School } from "@/lib/logic";
 
@@ -78,7 +79,13 @@ export function SchoolDetail() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
+      {/* 印刷時のみ出る見出し(画面では非表示)。塾持参・壁貼り用に学校名と出力日を載せる。 */}
+      <div className="hidden print:block">
+        <div className="text-lg font-bold text-neutral-900">{school.name} 過去問グリッド</div>
+        <div className="text-xs text-neutral-500">出力日 {new Date().toLocaleDateString("ja-JP")}</div>
+      </div>
+
+      <div className="flex items-center justify-between gap-2 no-print">
         <h1 className="text-[22px] font-bold tracking-tight text-neutral-900">
           {school.name}
           {school.sample && <span className="ml-1.5 align-middle text-xs font-medium text-neutral-400">サンプル</span>}
@@ -87,6 +94,8 @@ export function SchoolDetail() {
           学校を編集
         </Button>
       </div>
+
+      {grid.length > 0 && <ScoreGrid school={school} attempts={attempts} onPick={(a) => nav.goAttemptForm(school.id, a.id)} />}
 
       {trend.length >= 2 && <TrendChart points={trend} />}
 
@@ -113,7 +122,7 @@ export function SchoolDetail() {
       )}
 
       {grid.length > 0 ? (
-        <div className="space-y-2.5">
+        <div className="space-y-2.5 no-print">
           {grid.map(({ attempt: a, gap: g }) => (
             <AttemptCard key={a.id} school={school} attempt={a} status={g.status} onClick={() => nav.goAttemptForm(school.id, a.id)} />
           ))}
@@ -124,14 +133,19 @@ export function SchoolDetail() {
         </div>
       )}
 
-      <div className="grid gap-2.5 pt-1">
+      <div className="grid gap-2.5 pt-1 no-print">
         <Button size="block" onClick={() => nav.goAttemptForm(school.id, null)}>
           ＋ 結果を記録
         </Button>
         {grid.length > 0 && (
-          <Button variant="ghost" size="block" onClick={share}>
-            直近の結果をシェア
-          </Button>
+          <div className="grid grid-cols-2 gap-2.5">
+            <Button variant="ghost" size="block" onClick={share}>
+              シェア
+            </Button>
+            <Button variant="ghost" size="block" onClick={() => window.print()}>
+              印刷 / PDF
+            </Button>
+          </div>
         )}
       </div>
 

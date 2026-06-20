@@ -161,8 +161,18 @@ export function computeGap(
   return { total: t.total, maxTotal: t.maxTotal, minPass, gap, status };
 }
 
-export function subjectRates(school: School, attempts: Attempt[]): SubjectRate[] {
-  return (school.subjects ?? []).map((sub) => {
+// 1セル分の得点率(%)。未入力・満点0は null。グリッド表で科目セルを色分けするのに使う。
+export function scoreRate(score: number | null | undefined, max: number): number | null {
+  if (!isFilled(score) || !(Number(max) > 0)) return null;
+  return Math.round((Number(score) / Number(max)) * 100);
+}
+
+// 合計の得点率(%)。満点が学校・年度で違うので、横比較は生点でなく率で見る。
+export function totalRate(g: Pick<GapInfo, "total" | "maxTotal">): number | null {
+  return g.maxTotal > 0 ? Math.round((g.total / g.maxTotal) * 100) : null;
+}
+
+export function subjectRates(school: School, attempts: Attempt[]): SubjectRate[] {  return (school.subjects ?? []).map((sub) => {
     let sum = 0;
     let cnt = 0;
     for (const a of attempts ?? []) {

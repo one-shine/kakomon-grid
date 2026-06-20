@@ -34,6 +34,36 @@ body {
   font-feature-settings: "tnum";
 }
 
+/* 印刷 / PDF(A4 1枚で塾持参・壁貼り)。アプリの枠や操作ボタンは出さず、
+   学校名＋グリッド表＋出典だけをきれいに出す。色(得点率・合否)は印刷でも残す。 */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 14mm;
+  }
+  body {
+    background: #fff;
+  }
+  header,
+  footer,
+  .no-print {
+    display: none !important;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  .score-grid-wrap {
+    overflow: visible !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .anim-rise {
     animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;

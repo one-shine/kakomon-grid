@@ -58,6 +58,17 @@ describe("computeGap", () => {
     expect(L.computeGap(school2, { scores: { 国語: 60, 算数: 60 }, minPass: 120 }).status).toBe("PASS"));
 });
 
+describe("scoreRate / totalRate", () => {
+  it("1セルの得点率を四捨五入", () => expect(L.scoreRate(120, 150)).toBe(80));
+  it("0点は0%(入力扱い)", () => expect(L.scoreRate(0, 100)).toBe(0));
+  it("未入力・満点0は null", () => {
+    expect(L.scoreRate(null, 100)).toBeNull();
+    expect(L.scoreRate(50, 0)).toBeNull();
+  });
+  it("合計の得点率", () => expect(L.totalRate({ total: 350, maxTotal: 500 })).toBe(70));
+  it("満点0は null", () => expect(L.totalRate({ total: 0, maxTotal: 0 })).toBeNull());
+});
+
 describe("subjectRates / weakestSubject", () => {
   const attempts: Attempt[] = [
     at1,
