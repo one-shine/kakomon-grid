@@ -4,28 +4,26 @@ import tailwindcss from "@tailwindcss/vite";
 import { VitePWA } from "vite-plugin-pwa";
 import { fileURLToPath, URL } from "node:url";
 
+import { cloudflare } from "@cloudflare/vite-plugin";
+
 export default defineConfig({
   base: "./",
-  plugins: [
-    react(),
-    tailwindcss(),
-    VitePWA({
-      registerType: "autoUpdate",
-      includeAssets: ["favicon.svg"],
-      manifest: {
-        name: "過去問グリッド — 中学受験の過去問スコア管理",
-        short_name: "過去問グリッド",
-        description:
-          "志望校×年度×科目の過去問得点と合格最低点の差をひと目に。端末内で完結。",
-        lang: "ja",
-        display: "standalone",
-        background_color: "#ffffff",
-        theme_color: "#1d1d1f",
-        start_url: "./",
-        icons: [],
-      },
-    }),
-  ],
+  plugins: [react(), tailwindcss(), VitePWA({
+    registerType: "autoUpdate",
+    includeAssets: ["favicon.svg"],
+    manifest: {
+      name: "過去問グリッド — 中学受験の過去問スコア管理",
+      short_name: "過去問グリッド",
+      description:
+        "志望校×年度×科目の過去問得点と合格最低点の差をひと目に。端末内で完結。",
+      lang: "ja",
+      display: "standalone",
+      background_color: "#ffffff",
+      theme_color: "#1d1d1f",
+      start_url: "./",
+      icons: [],
+    },
+  }), cloudflare()],
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
