@@ -4,8 +4,7 @@ import { useToast } from "@/store/useToast";
 import { Button } from "@/components/ui/button";
 import { TrendChart, type TrendPoint } from "@/components/ui/TrendChart";
 import { ScoreGrid } from "@/components/ui/ScoreGrid";
-import { GuidanceCard } from "@/components/ui/GuidanceCard";
-import { buildGrid, buildGuidance, subjectRates, weakestSubject, buildShareText, computeGap, findReference, type GapStatus } from "@/lib/logic";
+import { buildGrid, subjectRates, weakestSubject, buildShareText, computeGap, findReference, type GapStatus } from "@/lib/logic";
 import type { Attempt, School } from "@/lib/logic";
 
 const GAP_TEXT: Record<GapStatus, string> = {
@@ -87,23 +86,21 @@ export function SchoolDetail() {
       </div>
 
       <div className="flex items-center justify-between gap-2 no-print">
-        <h1 className="mincho text-[24px] tracking-tight text-sumi">
+        <h1 className="text-[22px] font-bold tracking-tight text-neutral-900">
           {school.name}
-          {school.sample && <span className="ml-1.5 align-middle text-xs font-medium text-sumi/40">サンプル</span>}
+          {school.sample && <span className="ml-1.5 align-middle text-xs font-medium text-neutral-400">サンプル</span>}
         </h1>
         <Button variant="ghost" size="sm" onClick={() => nav.goSchoolForm(school.id)}>
           学校を編集
         </Button>
       </div>
 
-      <GuidanceCard g={buildGuidance(school, attempts)} onNext={() => nav.goAttemptForm(school.id, null)} />
-
       {grid.length > 0 && <ScoreGrid school={school} attempts={attempts} onPick={(a) => nav.goAttemptForm(school.id, a.id)} />}
 
       {trend.length >= 2 && <TrendChart points={trend} />}
 
       {anyRate && (
-        <div className="rounded-2xl border border-line bg-card p-4 shadow-sm">
+        <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
           <div className="mb-2 text-xs font-semibold text-neutral-500">科目別の平均得点率</div>
           <div className="space-y-1.5">
             {rates.map((r) => (
@@ -131,7 +128,7 @@ export function SchoolDetail() {
           ))}
         </div>
       ) : (
-        <div className="rounded-2xl border border-dashed border-line bg-card p-5 text-center text-sm text-neutral-500">
+        <div className="rounded-2xl border border-dashed border-neutral-300 bg-white p-5 text-center text-sm text-neutral-500">
           まだ記録がありません。<br />最初の1回は最低点に届かなくて当たり前。<b>伸び</b>を見るアプリです。
         </div>
       )}
@@ -184,7 +181,7 @@ export function SchoolDetail() {
       <button
         type="button"
         onClick={onClick}
-        className="block w-full rounded-2xl border border-line bg-card p-4 text-left shadow-sm active:scale-[0.99]"
+        className="block w-full rounded-2xl border border-neutral-200 bg-white p-4 text-left shadow-sm active:scale-[0.99]"
       >
         <div className="flex items-center justify-between">
           <div>

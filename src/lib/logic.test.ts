@@ -206,40 +206,6 @@ describe("migrateState で reference/source を保持", () => {
   it("sourceを保持", () => expect(mig.schools[0].source?.url).toBe("https://example.jp"));
 });
 
-describe("buildGuidance(記録→指針)", () => {
-  it("記録ゼロは『まず1年分』のinfo", () => {
-    const g = L.buildGuidance(school4, []);
-    expect(g.tone).toBe("info");
-    expect(g.headline).toContain("まず1年分");
-  });
-  it("最低点未入力は『合格最低点を入れると』のinfo", () => {
-    const noLine: Attempt = { id: "n1", schoolId: "sc1", year: 2025, round: "", scores: { 国語: 100, 算数: 120, 理科: 60, 社会: 70 }, minPass: null, memo: "" };
-    const g = L.buildGuidance(school4, [noLine]);
-    expect(g.tone).toBe("info");
-    expect(g.headline).toContain("合格最低点");
-  });
-  it("合格圏はgoodで『この調子』", () => {
-    // 合計350 / 最低点320 → +30 = PASS
-    const a: Attempt = { id: "p1", schoolId: "sc1", year: 2025, round: "", scores: { 国語: 110, 算数: 120, 理科: 60, 社会: 60 }, minPass: 320, memo: "" };
-    const g = L.buildGuidance(school4, [a]);
-    expect(g.tone).toBe("good");
-    expect(g.detail).toContain("+30");
-  });
-  it("BELOWは弱点科目で『あと何点』のleverを返す", () => {
-    // 合計260 / 最低点320 → -60。理科が弱点。
-    const a: Attempt = { id: "b1", schoolId: "sc1", year: 2025, round: "", scores: { 国語: 90, 算数: 90, 理科: 30, 社会: 50 }, minPass: 320, memo: "" };
-    const g = L.buildGuidance(school4, [a]);
-    expect(g.detail).toContain("あと60点");
-    expect(g.lever).toContain("理科");
-  });
-  it("伸びていれば励ましを返す", () => {
-    const old: Attempt = { id: "o1", schoolId: "sc1", year: 2024, round: "", scores: { 国語: 60, 算数: 60, 理科: 40, 社会: 40 }, minPass: 320, memo: "" };
-    const recent: Attempt = { id: "r1", schoolId: "sc1", year: 2025, round: "", scores: { 国語: 110, 算数: 120, 理科: 60, 社会: 60 }, minPass: 320, memo: "" };
-    const g = L.buildGuidance(school4, [old, recent]);
-    expect(g.encouragement).toContain("伸び");
-  });
-});
-
 describe("SCHOOL_CATALOG(同梱データ方針)", () => {
   it("全エントリに出典がある", async () => {
     const { SCHOOL_CATALOG } = await import("./schoolCatalog");

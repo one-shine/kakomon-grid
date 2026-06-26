@@ -3,15 +3,7 @@ import { useStore } from "@/store/useStore";
 import { useNav } from "@/store/useNav";
 import { useToast } from "@/store/useToast";
 import { Button } from "@/components/ui/button";
-import { Stepper } from "@/components/ui/Stepper";
-import { validateAttempt, findReference, computeGap } from "@/lib/logic";
-
-const ROUND_CHIPS = [
-  { v: "", label: "なし" },
-  { v: "①", label: "①" },
-  { v: "②", label: "②" },
-  { v: "③", label: "③" },
-];
+import { validateAttempt, findReference } from "@/lib/logic";
 
 export function AttemptForm() {
   const { schoolId, attemptId } = useNav();
@@ -21,14 +13,13 @@ export function AttemptForm() {
   const school = schools.find((s) => s.id === schoolId);
   const editing = attemptId ? attempts.find((a) => a.id === attemptId) ?? null : null;
 
-  const thisYear = new Date().getFullYear();
-  const [year, setYear] = useState<number>(editing ? editing.year : thisYear);
+  const [year, setYear] = useState<string>(editing ? String(editing.year) : String(new Date().getFullYear()));
   const [round, setRound] = useState(editing?.round ?? "");
   const [scores, setScores] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const s of school?.subjects ?? []) {
       const v = editing?.scores[s.name];
-      init[s.name] = v === 0 || v != null ? String(v) : "";
+      init[s.name] = v === 0 || (v != null) ? String(v) : "";
     }
     return init;
   });
@@ -50,13 +41,9 @@ export function AttemptForm() {
     return out;
   }
 
-  // 入れながら出る合計と「あと何点」のライブ表示(暗算不要・入れる手応え)
-  const live = computeGap(school, { scores: collectScores(), minPass: minPass === "" ? null : Number(minPass) });
-  const anyScore = Object.values(scores).some((v) => v !== "" && v != null);
-
   function save() {
     const draft = {
-      year,
+      year: Number(year),
       round: round.trim(),
       scores: collectScores(),
       minPass: minPass === "" ? null : Number(minPass),
@@ -82,37 +69,25 @@ export function AttemptForm() {
   }
 
   return (
-    <div className="space-y-4">
-      <h1 className="mincho text-[22px] text-sumi">{editing ? "記録を編集" : "結果を記録"}</h1>
+    <div className="space-y-3.5">
+      <h1 className="text-xl font-bold text-neutral-900">{editing ? "記録を編集" : "結果を記録"}</h1>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-[2fr_1fr] gap-2.5">
         <Field label="年度">
-          <Stepper value={year} onChange={setYear} min={1990} max={thisYear + 1} suffix="年" />
+          <input className={inputCls} type="number" inputMode="numeric" value={year} onChange={(e) => setYear(e.target.value)} />
         </Field>
         <Field label="回(任意)">
-          <div className="flex flex-wrap gap-1.5">
-            {ROUND_CHIPS.map((c) => (
-              <Chip key={c.label} active={round === c.v} onClick={() => setRound(c.v)}>
-                {c.label}
-              </Chip>
-            ))}
-            {round !== "" && !ROUND_CHIPS.some((c) => c.v === round) && (
-              <Chip active onClick={() => setRound("")}>
-                {round}
-              </Chip>
-            )}
-          </div>
+          <input className={inputCls} maxLength={6} placeholder="①" value={round} onChange={(e) => setRound(e.target.value)} />
         </Field>
       </div>
 
       <div className="space-y-2.5">
-        {school.subjects.map((s, i) => (
+        {school.subjects.map((s) => (
           <Field key={s.name} label={`${s.name}(満点${s.max})`}>
             <input
               className={inputCls}
               type="number"
               inputMode="numeric"
-              autoFocus={!editing && i === 0}
               value={scores[s.name] ?? ""}
               onChange={(e) => setScores((prev) => ({ ...prev, [s.name]: e.target.value }))}
             />
@@ -120,29 +95,10 @@ export function AttemptForm() {
         ))}
       </div>
 
-      {/* 入れながら出る合計＋あと何点(ライブ) */}
-      {anyScore && (
-        <div className="flex items-center justify-between rounded-xl bg-sumi/[0.045] px-4 py-3">
-          <div className="text-sm text-sumi/70">
-            合計 <b className="nums text-base text-sumi">{live.total}</b>
-            <span className="nums text-neutral-400">/{live.maxTotal}</span>
-          </div>
-          {live.gap != null ? (
-            <div
-              className={`text-sm font-semibold ${live.status === "PASS" ? "text-emerald-600" : live.status === "NEAR" ? "text-amber-600" : "text-rose-600"}`}
-            >
-              {live.gap >= 0 ? `合格最低点 +${live.gap}点` : `最低点まで あと${-live.gap}点`}
-            </div>
-          ) : (
-            <div className="text-xs text-neutral-400">最低点を入れると「あと何点」が出ます</div>
-          )}
-        </div>
-      )}
-
       <Field label="合格最低点(任意・あとで追記可)">
         <input className={inputCls} type="number" inputMode="numeric" placeholder="例:320" value={minPass} onChange={(e) => setMinPass(e.target.value)} />
         {(() => {
-          const ref = findReference(school!, year, round.trim());
+          const ref = findReference(school!, Number(year), round.trim());
           if (!ref || (ref.minPass == null && ref.avg == null)) return null;
           return (
             <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
@@ -177,7 +133,7 @@ export function AttemptForm() {
       </Button>
 
       {editing && (
-        <div className="mt-6 grid gap-2.5 border-t border-line pt-4">
+        <div className="mt-6 grid gap-2.5 border-t border-neutral-200 pt-4">
           <Button
             variant="dangerGhost"
             size="block"
@@ -201,27 +157,13 @@ export function AttemptForm() {
 }
 
 const inputCls =
-  "w-full rounded-xl border border-line bg-card px-3 py-3 text-base text-neutral-900 outline-none focus:border-neutral-400 focus:ring-2 focus:ring-neutral-300";
+  "w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-base text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-300";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="block">
+    <label className="block">
       <span className="mb-1.5 block text-xs text-neutral-500">{label}</span>
       {children}
-    </div>
-  );
-}
-
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`min-w-10 rounded-full border px-3 py-2 text-sm font-semibold transition-colors ${
-        active ? "border-neutral-900 bg-neutral-900 text-white" : "border-line bg-card text-neutral-700 active:bg-neutral-50"
-      }`}
-    >
-      {children}
-    </button>
+    </label>
   );
 }
