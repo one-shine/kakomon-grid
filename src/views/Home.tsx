@@ -2,7 +2,7 @@ import { useStore } from "@/store/useStore";
 import { useNav } from "@/store/useNav";
 import { useToast } from "@/store/useToast";
 import { Button } from "@/components/ui/button";
-import { latestGap, weakestSubject, type GapStatus } from "@/lib/logic";
+import { latestGap, buildGuidance, type GapStatus, type GuidanceTone } from "@/lib/logic";
 
 const BAR: Record<GapStatus, string> = {
   PASS: "bg-emerald-500",
@@ -17,11 +17,17 @@ const CHIP: Record<GapStatus, string> = {
   NO_LINE: "bg-neutral-100 text-neutral-500",
 };
 const CHIP_LABEL: Record<GapStatus, string> = { PASS: "合格圏", NEAR: "あと少し", BELOW: "要強化", NO_LINE: "—" };
+const GUIDE_TEXT: Record<GuidanceTone, string> = {
+  good: "text-emerald-700",
+  warn: "text-amber-700",
+  hard: "text-rose-700",
+  info: "text-neutral-600",
+};
 
 // 空状態で見せる「動く見本」=伸びている折れ線のミニプレビュー(価値を文字でなく絵で)
 function SamplePreview() {
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-line bg-card p-4 shadow-sm">
       <div className="mb-1 flex items-center justify-between">
         <span className="text-xs font-semibold text-neutral-500">見本:桜花中の過去問</span>
         <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">合格圏 +12</span>
@@ -47,11 +53,11 @@ export function Home() {
     return (
       <div className="anim-rise space-y-4 px-1 py-2">
         <div>
-          <h1 className="text-[30px] font-bold leading-tight tracking-tight text-neutral-900">
-            過去問は、<span className="text-brand">伸び</span>を見るもの。
+          <h1 className="mincho text-[28px] leading-[1.4] tracking-tight text-sumi">
+            過去問は、<span className="relative whitespace-nowrap text-shu">伸び<span className="absolute -bottom-0.5 left-0 h-[3px] w-full rounded-full bg-shu/30" aria-hidden="true" /></span>を見るもの。
           </h1>
-          <p className="mt-2 text-[15px] text-neutral-600">
-            志望校×年度の得点と<b>合格最低点との差</b>を、ひと目で。登録不要・端末内だけで完結。
+          <p className="mt-3 text-[15px] leading-relaxed text-sumi/70">
+            志望校×年度の得点と<b className="text-sumi">合格最低点との差</b>を、ひと目で。登録不要・端末内だけで完結。
           </p>
         </div>
         <SamplePreview />
@@ -71,14 +77,14 @@ export function Home() {
         {schools.map((sc) => {
           const lg = latestGap(sc, attempts);
           const count = attempts.filter((a) => a.schoolId === sc.id).length;
-          const weak = weakestSubject(sc, attempts);
+          const guide = buildGuidance(sc, attempts);
           const st: GapStatus = lg ? lg.status : "NO_LINE";
           return (
             <button
               key={sc.id}
               type="button"
               onClick={() => nav.goDetail(sc.id)}
-              className="flex w-full items-stretch overflow-hidden rounded-2xl border border-neutral-200 bg-white text-left shadow-sm active:scale-[0.99]"
+              className="flex w-full items-stretch overflow-hidden rounded-2xl border border-line bg-card text-left shadow-sm active:scale-[0.99]"
             >
               <span className={`w-1.5 flex-none ${BAR[st]}`} aria-hidden="true" />
               <span className="flex-1 p-4">
@@ -99,8 +105,11 @@ export function Home() {
                     </span>
                   )}
                 </span>
-                <span className="mt-2 block text-sm text-neutral-500">
-                  {count ? `記録 ${count}件${weak ? ` ・ 弱点:${weak.name}(${weak.rate}%)` : ""}` : "まだ記録がありません"}
+                <span className={`mt-2 block text-sm font-semibold ${GUIDE_TEXT[guide.tone]}`}>
+                  {guide.headline}
+                </span>
+                <span className="mt-0.5 block text-xs text-neutral-400">
+                  {count ? `${guide.detail}` : "まだ記録がありません"}
                 </span>
               </span>
             </button>

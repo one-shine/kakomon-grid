@@ -22,11 +22,19 @@ export interface YearStat {
   avg?: number | null;
 }
 
+// 「やる過去問」1コマ(年度×回)。計画→消化→記録を回すための予定単位。
+export interface PlanSlot {
+  year: number;
+  round: string;
+}
+
 export interface School {
   id: string;
   name: string;
   sample?: boolean;
   subjects: Subject[];
+  // やる過去問の計画(年度×回のコマ)。記録するとそのコマが「済」になる。
+  plan?: PlanSlot[];
   // 同梱の学校データから取り込んだ参考情報(任意)。手入力校では undefined。
   reference?: YearStat[];
   source?: SourceRef;
@@ -211,6 +219,49 @@ export function latestGap(school: School, attempts: Attempt[]): GapInfo | null {
   return grid.length ? grid[0].gap : null;
 }
 
+// ───────────────────────────────────────────────────────────
+// 過去問プラン(計画→消化→記録)。やる予定のコマ(plan)と記録済(attempts)を1枚に統合する。
+export interface PlanRow {
+  year: number;
+  round: string;
+  attempt: Attempt | null; // 済ならその記録
+  done: boolean; // 1科目以上入力済か
+  gap: GapInfo | null;
+}
+
+const slotKey = (year: number, round: string) => `${year}|${round || ""}`;
+
+// 予定コマと記録を年度降順で統合。同じ年度×回は記録(済)で上書き。
+export function buildPlanRows(school: School, attempts: Attempt[]): PlanRow[] {
+  const map = new Map<string, PlanRow>();
+  for (const p of school.plan ?? []) {
+    map.set(slotKey(p.year, p.round), { year: p.year, round: p.round || "", attempt: null, done: false, gap: null });
+  }
+  for (const a of attempts) {
+    if (a.schoolId !== school.id) continue;
+    const filled = attemptTotal(school, a).filled > 0;
+    map.set(slotKey(a.year, a.round), { year: a.year, round: a.round || "", attempt: a, done: filled, gap: computeGap(school, a) });
+  }
+  return [...map.values()].sort((x, y) =>
+    y.year !== x.year ? y.year - x.year : (x.round || "") < (y.round || "") ? -1 : (x.round || "") > (y.round || "") ? 1 : 0,
+  );
+}
+
+// 消化状況(済 / 全コマ)。グリッドを「計画の進捗」として読ませる中核指標。
+export function planProgress(school: School, attempts: Attempt[]): { done: number; total: number; rate: number } {
+  const rows = buildPlanRows(school, attempts);
+  const total = rows.length;
+  const done = rows.filter((r) => r.done).length;
+  return { done, total, rate: total ? Math.round((done / total) * 100) : 0 };
+}
+
+// 「直近N年×回なし」の予定コマを提案(学校追加時の初期プラン用)。baseYear は呼び出し側で渡す。
+export function suggestPlan(baseYear: number, count = 3): PlanSlot[] {
+  const out: PlanSlot[] = [];
+  for (let i = 0; i < count; i++) out.push({ year: baseYear - i, round: "" });
+  return out;
+}
+
 // 同梱データの参考値から、その年度・回に当たる合格最低点/平均点を引く(目安)。
 export function findReference(school: School, year: number, round: string): YearStat | null {
   const refs = school.reference ?? [];
@@ -222,6 +273,105 @@ export function findReference(school: School, year: number, round: string): Year
     refs.find((x) => x.year === year) ??
     null
   );
+}
+
+// ───────────────────────────────────────────────────────────
+// 指針(guidance):記録した得点から「射程圏か・あと何点・どの科目で・伸びているか・次の一手」を返す。
+// 可視化で終わらせず親の判断と不安軽減につなげる中核(価値=記録→指針)。すべて「目安」。
+export type GuidanceTone = "good" | "warn" | "hard" | "info";
+export interface Guidance {
+  tone: GuidanceTone;
+  headline: string; // 一言の見立て
+  detail: string; // あと何点 等の具体
+  lever?: string; // どの科目をどれだけ上げれば届くか
+  encouragement?: string; // 自分の伸びに基づく励まし
+  nextAction: string; // 次の一手(短文)
+}
+
+export function buildGuidance(school: School, attempts: Attempt[]): Guidance {
+  const grid = buildGrid(school, attempts); // 年度降順
+  const prog = planProgress(school, attempts);
+  if (!grid.length) {
+    return {
+      tone: "info",
+      headline: prog.total > 0 ? `やる過去問が${prog.total}コマ。まず1年分を記録しよう` : "まず1年分を記録しよう",
+      detail: "過去問の得点を入れると、合格最低点との距離と「伸び」が見えます。",
+      nextAction: "結果を記録する",
+    };
+  }
+  const remain = prog.total - prog.done;
+  const latest = grid[0].gap;
+
+  // 伸び:時系列(古い→新しい)の合計得点率の変化
+  const chrono = grid.slice().reverse();
+  const firstRate = totalRate(chrono[0].gap);
+  const lastRate = totalRate(latest);
+  const riseRate =
+    chrono.length >= 2 && firstRate != null && lastRate != null ? lastRate - firstRate : null;
+  const encouragement =
+    riseRate != null && riseRate > 0
+      ? `初回から得点率 +${riseRate}pt。伸びは出ている。`
+      : riseRate != null && riseRate < 0
+        ? `直近は得点率 ${riseRate}pt。波がある時期。`
+        : undefined;
+
+  const weak = weakestSubject(school, attempts);
+
+  if (latest.minPass == null || latest.gap == null) {
+    return {
+      tone: "info",
+      headline: "合格最低点を入れると「あと何点」が分かる",
+      detail: "この年度の合格最低点(目安でも可)を入れると、射程圏か・あと何点かを判定します。",
+      ...(encouragement ? { encouragement } : {}),
+      nextAction: "合格最低点を追記する",
+    };
+  }
+
+  // lever:弱点科目で差を埋める道筋(目安)
+  let lever: string | undefined;
+  if (weak && weak.rate != null && latest.gap < 0) {
+    const need = -latest.gap;
+    const target = Math.min(100, weak.rate + Math.ceil((need / weak.max) * 100));
+    const pts = Math.round(((target - weak.rate) / 100) * weak.max);
+    lever =
+      target > weak.rate && pts > 0
+        ? `弱点の${weak.name}(平均${weak.rate}%)を${target}%まで上げると約+${pts}点。${pts >= need ? "射程圏に入る。" : "差を縮められる。"}`
+        : `弱点は${weak.name}(平均${weak.rate}%)。複数科目で底上げを。`;
+  } else if (weak && weak.rate != null) {
+    lever = `弱点の${weak.name}(平均${weak.rate}%)を固めると合格圏が安定する。`;
+  }
+  const next = remain > 0 ? `${weak ? `${weak.name}を重点に、` : ""}残り${remain}コマを進める` : weak ? `${weak.name}を重点に、もう1年分` : "もう1年分を記録";
+
+  if (latest.status === "PASS") {
+    return {
+      tone: "good",
+      headline: "合格圏。この調子を維持",
+      detail: `合格最低点を +${latest.gap}点 上回っている。`,
+      ...(lever ? { lever } : {}),
+      ...(encouragement ? { encouragement } : {}),
+      nextAction: weak ? `${weak.name}を固めて安定させる` : "他の年度でも試す",
+    };
+  }
+  if (latest.status === "NEAR") {
+    return {
+      tone: "warn",
+      headline: "あと一歩で射程圏",
+      detail: `合格最低点まで あと${-latest.gap}点。`,
+      ...(lever ? { lever } : {}),
+      ...(encouragement ? { encouragement } : {}),
+      nextAction: next,
+    };
+  }
+  // BELOW
+  const rising = riseRate != null && riseRate > 0;
+  return {
+    tone: rising ? "warn" : "hard",
+    headline: rising ? "まだ届かないが、伸びは出ている" : "重点配分で差を詰める",
+    detail: `合格最低点まで あと${-latest.gap}点。${rising ? "焦らず積み上げを。" : ""}`.trim(),
+    ...(lever ? { lever } : {}),
+    ...(encouragement ? { encouragement } : {}),
+    nextAction: next,
+  };
 }
 
 export function buildShareText(school: School, attempt: Attempt, gapInfo: GapInfo): string {
@@ -283,6 +433,13 @@ export function migrateState(raw: unknown): AppState {
       subjects: (Array.isArray(s.subjects) ? s.subjects : [])
         .filter((x) => x && x.name)
         .map((x) => ({ name: String(x.name), max: Number(x.max) || 100 })),
+      ...(Array.isArray(s.plan) && s.plan.length
+        ? {
+            plan: s.plan
+              .filter((p): p is PlanSlot => !!p && Number.isFinite(Number(p.year)))
+              .map((p) => ({ year: Number(p.year), round: p.round ? String(p.round) : "" })),
+          }
+        : {}),
       ...(Array.isArray(s.reference) && s.reference.length
         ? {
             reference: s.reference
