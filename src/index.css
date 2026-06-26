@@ -1,11 +1,18 @@
 @import "tailwindcss";
 
-/* ブランド/デザイントークン(UXレビュー 2026-06-17 反映)
-   - 競合はExcel自作テンプレ。「1指標(差・伸び)を主役化＋階層」で市場優位を取る。
-   - 色は機能(信号=得点率/合否)にのみ。地はneutral-50、カードは白＋影で浮かせ階層を作る。 */
+/* ブランド/デザイン言語「朱筆と紙」(2026-06-26 アイデンティティ刷新)
+   - 受験の記録に合う佇まい=紙の地・墨の文字・紺の構造・朱(先生の赤ペン/朱印)の差し色。
+   - 汎用の角丸カード＋青の"AIデフォルト顔"を脱し、明朝見出しで教育の品格を出す。
+   - 色は原則 機能(信号=得点率/合否)にのみ。朱はブランドの印(ロゴ/見出しの罫)に限定し信号色と分ける。 */
 @theme {
-  --color-brand: #2347b8;       /* 藍:信頼・学習感。CTA/アクセント限定 */
-  --color-brand-ink: #1b3a99;
+  --color-brand: #22324e;        /* 紺(navy):構造・CTA・リンク */
+  --color-brand-ink: #16223a;
+  --color-shu: #b23b2e;          /* 朱:印・赤ペンの差し色(ロゴ・見出しの罫のみ) */
+  --color-paper: #f4f1ea;        /* 紙の地 */
+  --color-card: #fffdf8;         /* 生成りの白カード(冷たい純白を避ける) */
+  --color-sumi: #211e1a;         /* 墨:本文 */
+  --color-line: #e4ded2;         /* 温かみのある罫線 */
+  --font-mincho: "Hiragino Mincho ProN", "Yu Mincho", YuMincho, "Noto Serif JP", "Songti SC", serif;
 }
 
 :root {
@@ -22,10 +29,26 @@ body,
 body {
   font-family:
     -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", "Segoe UI", sans-serif;
-  background: #f5f5f7; /* neutral-50相当:白カードを浮かせる地 */
-  color: #1d1d1f;
+  background: #f4f1ea; /* 紙の地 */
+  color: #211e1a; /* 墨 */
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* 明朝の見出し=教育・出版の品格。汎用サンセリフ顔からの脱却の要。 */
+.mincho {
+  font-family: var(--font-mincho);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* 朱印ロゴ(落款風):朱の角印に白抜きの明朝「過」。AIデフォルトの角丸四角アイコンを置き換える。 */
+.seal {
+  font-family: var(--font-mincho);
+  background: var(--color-shu);
+  color: #fff;
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.35);
+  border-radius: 4px;
 }
 
 /* 数値は全面 tabular-nums(数字のガタつき防止=数値アプリの基本作法) */

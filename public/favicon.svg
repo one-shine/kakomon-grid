@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="10" fill="#b23b2e"/>
+  <rect x="4.5" y="4.5" width="55" height="55" rx="7" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="2"/>
+  <text x="32" y="34" font-family="'Hiragino Mincho ProN','Yu Mincho',serif" font-size="40" font-weight="600" fill="#ffffff" text-anchor="middle" dominant-baseline="central">過</text>
+</svg>
