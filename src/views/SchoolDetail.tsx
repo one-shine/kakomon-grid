@@ -97,10 +97,11 @@ export function SchoolDetail() {
     </p>
   );
 
+  // タブ名は動詞「記録する」(計画タブ)との衝突を避け、見る対象=名詞で揃える:いま/計画/結果。
   const TABS: { id: typeof tab; label: string }[] = [
     { id: "now", label: "いま" },
     { id: "plan", label: "計画" },
-    { id: "records", label: "記録" },
+    { id: "records", label: "結果" },
   ];
 
   return (
@@ -161,13 +162,10 @@ export function SchoolDetail() {
             )}
             <GuidanceCard g={buildGuidance(school, attempts)} onNext={() => nav.goAttemptForm(school.id, null)} />
             {grid.length > 0 && <EffectCard e={effect} />}
-            <Button size="block" onClick={() => nav.goAttemptForm(school.id, null)}>
-              ＋ 結果を記録
-            </Button>
           </div>
         )}
 
-        {/* ── 計画:過去問プラン ── */}
+        {/* ── 計画:過去問プラン＋記録(予定を消化＝結果を記録する本拠) ── */}
         {tab === "plan" && (
           <div className="space-y-4">
             <PlanCard school={school} attempts={attempts} />
@@ -177,7 +175,7 @@ export function SchoolDetail() {
           </div>
         )}
 
-        {/* ── 記録:グリッド・伸び・科目別・記録一覧 ── */}
+        {/* ── 結果:グリッド・伸び・科目別・記録一覧(=記録の結果を見る) ── */}
         {tab === "records" && (
           <div className="space-y-4">
             {grid.length > 0 ? (
@@ -210,29 +208,23 @@ export function SchoolDetail() {
                     <AttemptCard key={a.id} school={school} attempt={a} status={g.status} onClick={() => nav.goAttemptForm(school.id, a.id)} />
                   ))}
                 </div>
-                <div className="grid gap-2.5 pt-1">
-                  <Button size="block" onClick={() => nav.goAttemptForm(school.id, null)}>
-                    ＋ 結果を記録
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  <Button variant="ghost" size="block" onClick={share}>
+                    シェア
                   </Button>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <Button variant="ghost" size="block" onClick={share}>
-                      シェア
-                    </Button>
-                    <Button variant="ghost" size="block" onClick={() => window.print()}>
-                      印刷 / PDF
-                    </Button>
-                  </div>
+                  <Button variant="ghost" size="block" onClick={() => window.print()}>
+                    印刷 / PDF
+                  </Button>
                 </div>
               </>
             ) : (
-              <>
-                <div className="rounded-2xl border border-dashed border-line bg-card p-5 text-center text-sm text-neutral-500">
-                  まだ記録がありません。<br />最初の1回は最低点に届かなくて当たり前。<b>伸び</b>を見るアプリです。
-                </div>
-                <Button size="block" onClick={() => nav.goAttemptForm(school.id, null)}>
-                  ＋ 結果を記録
-                </Button>
-              </>
+              <div className="rounded-2xl border border-dashed border-line bg-card p-5 text-center text-sm text-neutral-500">
+                まだ記録がありません。<br />
+                <button type="button" className="font-semibold text-brand underline" onClick={() => setTab("plan")}>
+                  「計画」タブ
+                </button>
+                で過去問を記録すると、ここに結果が出ます。
+              </div>
             )}
           </div>
         )}
