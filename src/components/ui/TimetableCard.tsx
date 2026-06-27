@@ -3,7 +3,6 @@ import { RotateCcw, Sparkles } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import {
   suggestTimetable,
-  emptyTimetable,
   defaultTimetable,
   planSummary,
   weakestSubject,
@@ -31,7 +30,8 @@ function eventClass(v: string): string {
 
 export function TimetableCard({ school, attempts }: { school: School; attempts: Attempt[] }) {
   const { setTimetable } = useStore();
-  const grid = school.timetable ?? defaultTimetable();
+  // 未設定の学校は「提案済みの時間割」を最初から表示=過去問ゼロでも開いた瞬間に使える(空にしない)。
+  const grid = school.timetable ?? suggestTimetable(school, attempts, defaultTimetable());
   const jsToMon = (new Date().getDay() + 6) % 7; // 月=0…日=6
   const [day, setDay] = useState<number>(jsToMon);
   // 範囲選択:a=開始枠, b=終了枠(index)。done=2タップ完了。
@@ -111,7 +111,7 @@ export function TimetableCard({ school, attempts }: { school: School; attempts: 
         </div>
       ) : (
         <div className="rounded-xl bg-sumi/[0.04] px-3 py-2.5 text-xs leading-relaxed text-sumi/55">
-          過去問を記録すると、<b>弱点科目を多めに</b>した時間割を自動で提案します。
+          今は科目を<b>均等に</b>配分しています。<b>過去問が入ると</b>、弱点に合わせて配分の精度が上がります。
         </div>
       )}
 
@@ -171,10 +171,10 @@ export function TimetableCard({ school, attempts }: { school: School; attempts: 
       <div className="flex justify-end px-1">
         <button
           type="button"
-          onClick={() => (setTimetable(school.id, emptyTimetable()), resetSel())}
+          onClick={() => (setTimetable(school.id, defaultTimetable()), resetSel())}
           className="inline-flex items-center gap-1 text-xs text-sumi/45"
         >
-          <RotateCcw size={12} /> 全消去
+          <RotateCcw size={12} /> リセット(学校だけに)
         </button>
       </div>
     </div>

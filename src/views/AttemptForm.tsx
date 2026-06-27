@@ -87,7 +87,7 @@ export function AttemptForm() {
     <div className="space-y-4">
       <h1 className="mincho text-[22px] text-sumi">{editing ? "記録を編集" : "結果を記録"}</h1>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-3.5">
         <Field label="年度">
           <Stepper value={year} onChange={setYear} min={1990} max={thisYear + 1} suffix="年" />
         </Field>
@@ -124,7 +124,7 @@ export function AttemptForm() {
 
       {/* 入れながら出る合計＋あと何点(ライブ) */}
       {anyScore && (
-        <div className="flex items-center justify-between rounded-xl bg-sumi/[0.045] px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl bg-sumi/[0.045] px-4 py-3">
           <div className="text-sm text-sumi/70">
             合計 <b className="nums text-base text-sumi">{live.total}</b>
             <span className="nums text-neutral-400">/{live.maxTotal}</span>

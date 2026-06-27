@@ -362,6 +362,33 @@ describe("週の学習時間割(suggestTimetable)", () => {
   });
 });
 
+describe("今週やること(buildWeeklyTodo)", () => {
+  const sc: School = { ...school4, plan: [{ year: 2025, round: "①" }, { year: 2024, round: "①" }] };
+  const doneUnrev: Attempt = { id: "d1", schoolId: "sc1", year: 2025, round: "①", scores: { 国語: 100, 算数: 120, 理科: 30, 社会: 60 }, minPass: 320, memo: "" };
+
+  it("解き直し残りが最優先で出る", () => {
+    const t = L.buildWeeklyTodo(sc, [doneUnrev]);
+    expect(t[0].kind).toBe("review");
+    expect(t[0].attemptId).toBe("d1");
+  });
+  it("次の過去問(古い順)と弱点も出る", () => {
+    const t = L.buildWeeklyTodo(sc, [doneUnrev]);
+    const kk = t.find((x) => x.kind === "kakomon");
+    expect(kk?.year).toBe(2024); // 未消化の古い順(2025は記録済)
+    expect(t.some((x) => x.kind === "weak")).toBe(true);
+    expect(t.length).toBeLessThanOrEqual(3);
+  });
+  it("解き直し済みなら review 項目は出ない", () => {
+    const t = L.buildWeeklyTodo(sc, [{ ...doneUnrev, reviewed: true }]);
+    expect(t.some((x) => x.kind === "review")).toBe(false);
+  });
+  it("記録ゼロでも次の過去問は出る", () => {
+    const t = L.buildWeeklyTodo({ ...school4, plan: [{ year: 2023, round: "" }] }, []);
+    expect(t[0].kind).toBe("kakomon");
+    expect(t[0].year).toBe(2023);
+  });
+});
+
 describe("SCHOOL_CATALOG(同梱データ方針)", () => {
   it("全エントリに出典がある", async () => {
     const { SCHOOL_CATALOG } = await import("./schoolCatalog");

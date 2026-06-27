@@ -57,6 +57,17 @@ body {
   font-feature-settings: "tnum";
 }
 
+/* 数値入力のスピナー(▲▼)を消す。モバイルで不揃い・余白ズレの原因。入力は inputMode="numeric" の数字キーパッドで行う。 */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 /* 印刷 / PDF(A4 1枚で塾持参・壁貼り)。アプリの枠や操作ボタンは出さず、
    学校名＋グリッド表＋出典だけをきれいに出す。色(得点率・合否)は印刷でも残す。 */
 @media print {

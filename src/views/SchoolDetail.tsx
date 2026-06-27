@@ -9,6 +9,7 @@ import { GuidanceCard } from "@/components/ui/GuidanceCard";
 import { PlanCard } from "@/components/ui/PlanCard";
 import { EffectCard } from "@/components/ui/EffectCard";
 import { TimetableCard } from "@/components/ui/TimetableCard";
+import { WeeklyTodoCard } from "@/components/ui/WeeklyTodoCard";
 import { buildGrid, buildGuidance, buildPace, buildEffect, subjectRates, weakestSubject, buildShareText, computeGap, findReference, type GapStatus } from "@/lib/logic";
 import type { Attempt, School } from "@/lib/logic";
 
@@ -163,7 +164,8 @@ export function SchoolDetail() {
                 )}
               </div>
             )}
-            <GuidanceCard g={buildGuidance(school, attempts)} onNext={() => nav.goAttemptForm(school.id, null)} />
+            <WeeklyTodoCard school={school} attempts={attempts} onFocusWeak={() => setTab("timetable")} />
+            <GuidanceCard g={buildGuidance(school, attempts)} />
             {grid.length > 0 && <EffectCard e={effect} />}
           </div>
         )}

@@ -321,6 +321,43 @@ export function buildEffect(school: School, attempts: Attempt[]): Effect {
 }
 
 // ───────────────────────────────────────────────────────────
+// 「今週やること」=既存データから次の具体行動を1〜3件提示(スタサプのミッションの思想)。
+// 新規入力ゼロ・過去問軸を強める。優先:やりっぱなし防止(直し)→次の過去問→弱点重点。
+export interface TodoItem {
+  kind: "review" | "kakomon" | "weak";
+  text: string;
+  attemptId?: string; // review:この記録を開く
+  year?: number; // kakomon:この年度を記録(prefill)
+  round?: string;
+}
+
+export function buildWeeklyTodo(school: School, attempts: Attempt[]): TodoItem[] {
+  const items: TodoItem[] = [];
+  const rows = buildPlanRows(school, attempts); // 年度降順
+
+  // 1. 解き直しが残っている記録(やりっぱなし防止=最優先)。直近のものから。
+  const unreviewed = rows.find((r) => r.done && r.attempt && !r.attempt.reviewed);
+  if (unreviewed?.attempt) {
+    items.push({ kind: "review", text: `${unreviewed.year}年度${unreviewed.round}の解き直しをやろう`, attemptId: unreviewed.attempt.id });
+  }
+
+  // 2. 次にやる過去問(未消化のうち古い年度から)
+  const todo = rows.filter((r) => !r.done).sort((a, b) => a.year - b.year || (a.round < b.round ? -1 : 1));
+  if (todo.length) {
+    const r = todo[0];
+    items.push({ kind: "kakomon", text: `過去問 ${r.year}${r.round} を解こう`, year: r.year, round: r.round });
+  }
+
+  // 3. 弱点科目を重点に
+  const weak = weakestSubject(school, attempts);
+  if (weak && weak.rate != null) {
+    items.push({ kind: "weak", text: `弱点の${weak.name}(平均${weak.rate}%)を重点に` });
+  }
+
+  return items.slice(0, 3);
+}
+
+// ───────────────────────────────────────────────────────────
 // 週の学習時間割。過去問の弱点から「何を・いつやるか」を自動提案し、親がタップで微調整する。
 // = 過去問の結果→学習計画(成果軸の上の差別化)。毎日入力は不要(提案ベース)。
 export const WEEK_DAYS = ["月", "火", "水", "木", "金", "土", "日"];

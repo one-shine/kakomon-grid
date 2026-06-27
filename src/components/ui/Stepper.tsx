@@ -21,12 +21,12 @@ export function Stepper({
     "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line " +
     "text-neutral-900 transition-colors active:bg-neutral-100 disabled:opacity-40 disabled:pointer-events-none";
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2">
       <button type="button" aria-label="減らす" className={btn} disabled={min != null && value <= min}
         onClick={() => onChange(clamp(value - step))}>
         <Minus size={18} />
       </button>
-      <div className="nums min-w-16 text-center text-lg font-semibold text-neutral-900">
+      <div className="nums min-w-12 text-center text-lg font-semibold text-neutral-900">
         {value}
         {suffix && <span className="ml-0.5 text-sm font-normal text-neutral-500">{suffix}</span>}
       </div>
