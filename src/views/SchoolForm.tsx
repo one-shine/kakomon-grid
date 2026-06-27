@@ -10,10 +10,11 @@ export function SchoolForm() {
   const { schoolId } = useNav();
   const nav = useNav();
   const toast = useToast();
-  const { schools, addSchool, addSchoolFull, updateSchool, removeSchool } = useStore();
+  const { schools, addSchool, addSchoolFull, updateSchool, removeSchool, setExamDate } = useStore();
   const editing = schoolId ? schools.find((s) => s.id === schoolId) ?? null : null;
 
   const [name, setName] = useState(editing?.name ?? "");
+  const [examDate, setExamDateLocal] = useState(editing?.examDate ?? "");
   const [subjects, setSubjects] = useState<Subject[]>(
     editing ? editing.subjects.map((s) => ({ ...s })) : SUBJECT_PRESETS[0].subjects.map((s) => ({ ...s })),
   );
@@ -59,22 +60,22 @@ export function SchoolForm() {
       setErrors(v.errors);
       return;
     }
+    let id: string;
     if (editing) {
       updateSchool(editing.id, draft.name, draft.subjects);
-      nav.goDetail(editing.id);
+      id = editing.id;
     } else {
       // カタログから選んだ場合は出典(公式リンク)を必ず保持。手入力は素のまま。
-      const id = picked
-        ? addSchoolFull({ ...draft, reference: reference ?? [], source })
-        : addSchool(draft.name, draft.subjects);
-      nav.goDetail(id);
+      id = picked ? addSchoolFull({ ...draft, reference: reference ?? [], source }) : addSchool(draft.name, draft.subjects);
     }
+    setExamDate(id, examDate); // 入試日(空なら解除)
+    nav.goDetail(id);
     toast.show("保存しました");
   }
 
   return (
     <div className="space-y-3.5">
-      <h1 className="text-xl font-bold text-neutral-900">{editing ? "学校を編集" : "志望校を追加"}</h1>
+      <h1 className="mincho text-[22px] text-sumi">{editing ? "学校を編集" : "志望校を追加"}</h1>
 
       {!editing && (
         <Field label="公式データから選ぶ(任意・順次追加中)">
@@ -115,22 +116,33 @@ export function SchoolForm() {
         />
       </Field>
 
+      <Field label="入試日(任意・残り日数とペースの逆算に使う)">
+        <input
+          className={inputCls}
+          type="date"
+          value={examDate}
+          onChange={(e) => setExamDateLocal(e.target.value)}
+        />
+      </Field>
+
       <Field label="科目構成">
-        <select className={inputCls} value={presetId} onChange={(e) => applyPreset(e.target.value)}>
+        <div className="flex flex-wrap gap-1.5">
           {SUBJECT_PRESETS.map((p) => (
-            <option key={p.id} value={p.id}>
+            <PresetChip key={p.id} active={presetId === p.id} onClick={() => applyPreset(p.id)}>
               {p.label}
-            </option>
+            </PresetChip>
           ))}
-          <option value="custom">カスタム(下で自由に設定)</option>
-        </select>
+          <PresetChip active={presetId === "custom"} onClick={() => setPresetId("custom")}>
+            カスタム
+          </PresetChip>
+        </div>
       </Field>
 
       <div className="space-y-2">
         {subjects.map((s, i) => (
           <div key={i} className="flex items-center gap-2">
             <input
-              className={`${inputCls} flex-1`}
+              className={`${inputBase} min-w-0 flex-1`}
               value={s.name}
               maxLength={8}
               placeholder="科目名"
@@ -138,7 +150,7 @@ export function SchoolForm() {
             />
             <span className="flex-none text-sm text-neutral-500">満点</span>
             <input
-              className={`${inputCls} w-24 flex-none`}
+              className={`${inputBase} w-20 flex-none text-center`}
               type="number"
               inputMode="numeric"
               value={s.max}
@@ -161,7 +173,7 @@ export function SchoolForm() {
       </Button>
 
       {editing && (
-        <div className="mt-6 grid gap-2.5 border-t border-neutral-200 pt-4">
+        <div className="mt-6 grid gap-2.5 border-t border-line pt-4">
           {!confirmDel ? (
             <Button variant="dangerGhost" size="block" onClick={() => setConfirmDel(true)}>
               この学校と記録をすべて削除
@@ -185,14 +197,29 @@ export function SchoolForm() {
   );
 }
 
-const inputCls =
-  "w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-base text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-300";
+const inputBase =
+  "rounded-xl border border-line bg-card px-3 py-3 text-base text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-300";
+const inputCls = `w-full ${inputBase}`;
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block">
+    <div className="block">
       <span className="mb-1.5 block text-xs text-neutral-500">{label}</span>
       {children}
-    </label>
+    </div>
+  );
+}
+
+function PresetChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border px-3.5 py-2 text-sm font-semibold transition-colors ${
+        active ? "border-neutral-900 bg-neutral-900 text-white" : "border-line bg-card text-neutral-700 active:bg-neutral-50"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
