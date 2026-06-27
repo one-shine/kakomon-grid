@@ -22,11 +22,11 @@ export function ScoreGrid({ school, attempts, onPick }: { school: School; attemp
   const td = "px-2.5 py-2 text-center text-sm whitespace-nowrap nums";
 
   return (
-    <div className="score-grid-wrap overflow-x-auto rounded-2xl border border-line bg-card shadow-sm">
+    <div className="score-grid-wrap overflow-x-auto rounded-2xl border border-neutral-200 bg-white shadow-sm">
       <table className="w-full border-collapse">
         <thead>
-          <tr className="border-b border-line">
-            <th className={`${th} sticky left-0 z-10 bg-card text-left`}>年度</th>
+          <tr className="border-b border-neutral-200">
+            <th className={`${th} sticky left-0 z-10 bg-white text-left`}>年度</th>
             {school.subjects.map((s) => (
               <th key={s.name} className={th}>
                 {s.name}
@@ -49,7 +49,7 @@ export function ScoreGrid({ school, attempts, onPick }: { school: School; attemp
                 onClick={onPick ? () => onPick(a) : undefined}
                 style={onPick ? { cursor: "pointer" } : undefined}
               >
-                <th scope="row" className={`${td} sticky left-0 z-10 bg-card text-left font-bold text-neutral-800`}>
+                <th scope="row" className={`${td} sticky left-0 z-10 bg-white text-left font-bold text-neutral-800`}>
                   {String(a.year).slice(2)}
                   <span className="text-xs font-normal text-neutral-400">{a.round}</span>
                 </th>

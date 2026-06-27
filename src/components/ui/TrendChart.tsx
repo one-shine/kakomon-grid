@@ -44,7 +44,7 @@ export function TrendChart({ points }: { points: TrendPoint[] }) {
   const hasAvg = avgPts.length >= 2;
 
   return (
-    <div className="rounded-2xl border border-line bg-card p-3 shadow-sm">
+    <div className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
       <div className="mb-1 flex items-center justify-between">
         <span className="text-xs font-semibold text-neutral-500">合計点の推移(合格最低点との距離)</span>
         <span className="flex items-center gap-2 text-[10px] text-neutral-400">
