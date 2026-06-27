@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useStore } from "@/store/useStore";
 import { useNav } from "@/store/useNav";
 import { useToast } from "@/store/useToast";
@@ -41,6 +42,7 @@ export function SchoolDetail() {
   const nav = useNav();
   const toast = useToast();
   const { schools, attempts, updateAttempt } = useStore();
+  const [tab, setTab] = useState<"now" | "plan" | "records">("now");
   const school = schools.find((s) => s.id === schoolId);
   if (!school) {
     nav.goHome();
@@ -48,7 +50,6 @@ export function SchoolDetail() {
   }
 
   const grid = buildGrid(school, attempts); // 年度降順
-  const hasPlan = (school.plan?.length ?? 0) > 0;
   const todayISO = new Date().toISOString().slice(0, 10);
   const pace = buildPace(school, attempts, todayISO);
   const effect = buildEffect(school, attempts);
@@ -84,123 +85,160 @@ export function SchoolDetail() {
     } else toast.show("コピーできませんでした");
   }
 
+  const sourceNote = school.source && (
+    <p className="px-1 pt-1 text-[11px] leading-relaxed text-neutral-400">
+      合格最低点・平均点は<b>目安</b>です。出典:
+      {school.source.url ? (
+        <a href={school.source.url} target="_blank" rel="noreferrer" className="underline">{school.source.label}</a>
+      ) : (
+        school.source.label
+      )}
+      {school.source.asof && `(${school.source.asof}時点)`}。最新・正確な情報は各校公式でご確認ください。
+    </p>
+  );
+
+  const TABS: { id: typeof tab; label: string }[] = [
+    { id: "now", label: "いま" },
+    { id: "plan", label: "計画" },
+    { id: "records", label: "記録" },
+  ];
+
   return (
     <div className="space-y-4">
-      {/* 印刷時のみ出る見出し(画面では非表示)。塾持参・壁貼り用に学校名と出力日を載せる。 */}
+      {/* 印刷時のみ出る:学校名＋グリッド＋出典(塾持参・壁貼り用)。タブ状態に依らず常にDOMに置く。 */}
       <div className="hidden print:block">
         <div className="text-lg font-bold text-neutral-900">{school.name} 過去問グリッド</div>
-        <div className="text-xs text-neutral-500">出力日 {new Date().toLocaleDateString("ja-JP")}</div>
+        <div className="mb-3 text-xs text-neutral-500">出力日 {new Date().toLocaleDateString("ja-JP")}</div>
+        {grid.length > 0 && <ScoreGrid school={school} attempts={attempts} />}
+        {sourceNote}
       </div>
 
-      <div className="flex items-center justify-between gap-2 no-print">
-        <h1 className="mincho text-[24px] tracking-tight text-sumi">
-          {school.name}
-          {school.sample && <span className="ml-1.5 align-middle text-xs font-medium text-sumi/40">サンプル</span>}
-        </h1>
-        <Button variant="ghost" size="sm" onClick={() => nav.goSchoolForm(school.id)}>
-          学校を編集
-        </Button>
-      </div>
-
-      {/* 計画/スケジュールの一行ステータス(本番まで・未消化・直し)=PDCAが上から読める */}
-      {(pace.daysLeft != null || pace.remain > 0 || effect.done > 0) && (
-        <div className="no-print flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-sumi/[0.04] px-4 py-2.5 text-sm">
-          {pace.daysLeft != null && pace.daysLeft >= 0 && (
-            <span className="text-sumi/80">
-              本番まで <b className="nums text-sumi">{pace.daysLeft}</b>日
-            </span>
-          )}
-          {pace.remain > 0 && (
-            <span className="text-sumi/70">
-              未消化 <b className="nums text-sumi">{pace.remain}</b>コマ
-              {pace.daysPerSlot != null && <span className={`ml-1 text-xs ${pace.tight ? "text-rose-600" : "text-sumi/50"}`}>({pace.daysPerSlot}日に1コマ)</span>}
-            </span>
-          )}
-          {effect.done > 0 && (
-            <span className="text-sumi/70">
-              直し <b className="nums text-sumi">{effect.reviewed}/{effect.done}</b>
-            </span>
-          )}
+      {/* 画面UI(印刷では非表示)。タブで「いま/計画/記録」に分けて1ページの密度を下げる。 */}
+      <div className="no-print space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <h1 className="mincho text-[24px] tracking-tight text-sumi">
+            {school.name}
+            {school.sample && <span className="ml-1.5 align-middle text-xs font-medium text-sumi/40">サンプル</span>}
+          </h1>
+          <Button variant="ghost" size="sm" onClick={() => nav.goSchoolForm(school.id)}>
+            学校を編集
+          </Button>
         </div>
-      )}
 
-      <GuidanceCard g={buildGuidance(school, attempts)} onNext={() => nav.goAttemptForm(school.id, null)} />
-
-      {grid.length > 0 && (
-        <div className="no-print">
-          <EffectCard e={effect} />
-        </div>
-      )}
-
-      <div className="no-print">
-        <PlanCard school={school} attempts={attempts} />
-      </div>
-
-      {grid.length > 0 && <ScoreGrid school={school} attempts={attempts} onPick={(a) => nav.goAttemptForm(school.id, a.id)} />}
-
-      {trend.length >= 2 && <TrendChart points={trend} />}
-
-      {anyRate && (
-        <div className="rounded-2xl border border-line bg-card p-4 shadow-sm">
-          <div className="mb-2 text-xs font-semibold text-neutral-500">科目別の平均得点率</div>
-          <div className="space-y-1.5">
-            {rates.map((r) => (
-              <div key={r.name} className="flex items-center gap-2.5">
-                <span className="w-12 flex-none text-sm font-semibold text-neutral-700">{r.name}</span>
-                <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-neutral-100">
-                  <div className={`h-full rounded-full ${rateColor(r.rate)}`} style={{ width: `${r.rate ?? 0}%` }} />
-                </div>
-                <span className="nums w-10 flex-none text-right text-xs text-neutral-500">{r.rate != null ? `${r.rate}%` : "—"}</span>
-              </div>
-            ))}
-          </div>
-          {weak && (
-            <div className="mt-2.5 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
-              弱点は <b>{weak.name}</b>(平均{weak.rate}%)。ここに時間を寄せるのが合格への近道。
-            </div>
-          )}
-        </div>
-      )}
-
-      {grid.length > 0 ? (
-        <div className="space-y-2.5 no-print">
-          {grid.map(({ attempt: a, gap: g }) => (
-            <AttemptCard key={a.id} school={school} attempt={a} status={g.status} onClick={() => nav.goAttemptForm(school.id, a.id)} />
+        {/* タブバー(朱の下線=アイデンティティ) */}
+        <div className="flex gap-1 border-b border-line">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={`relative px-4 py-2.5 text-sm font-semibold transition-colors ${tab === t.id ? "text-sumi" : "text-sumi/45"}`}
+            >
+              {t.label}
+              {tab === t.id && <span className="absolute -bottom-px left-2 right-2 h-0.5 rounded-full bg-shu" aria-hidden="true" />}
+            </button>
           ))}
         </div>
-      ) : hasPlan ? null : (
-        <div className="rounded-2xl border border-dashed border-line bg-card p-5 text-center text-sm text-neutral-500">
-          まだ記録がありません。<br />最初の1回は最低点に届かなくて当たり前。<b>伸び</b>を見るアプリです。
-        </div>
-      )}
 
-      <div className="grid gap-2.5 pt-1 no-print">
-        <Button size="block" onClick={() => nav.goAttemptForm(school.id, null)}>
-          ＋ 結果を記録
-        </Button>
-        {grid.length > 0 && (
-          <div className="grid grid-cols-2 gap-2.5">
-            <Button variant="ghost" size="block" onClick={share}>
-              シェア
-            </Button>
-            <Button variant="ghost" size="block" onClick={() => window.print()}>
-              印刷 / PDF
+        {/* ── いま:本番まで・見立て・効いているか ── */}
+        {tab === "now" && (
+          <div className="space-y-4">
+            {(pace.daysLeft != null || pace.remain > 0 || effect.done > 0) && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-sumi/[0.04] px-4 py-2.5 text-sm">
+                {pace.daysLeft != null && pace.daysLeft >= 0 && (
+                  <span className="text-sumi/80">本番まで <b className="nums text-sumi">{pace.daysLeft}</b>日</span>
+                )}
+                {pace.remain > 0 && (
+                  <span className="text-sumi/70">
+                    未消化 <b className="nums text-sumi">{pace.remain}</b>コマ
+                    {pace.daysPerSlot != null && <span className={`ml-1 text-xs ${pace.tight ? "text-rose-600" : "text-sumi/50"}`}>({pace.daysPerSlot}日に1コマ)</span>}
+                  </span>
+                )}
+                {effect.done > 0 && (
+                  <span className="text-sumi/70">直し <b className="nums text-sumi">{effect.reviewed}/{effect.done}</b></span>
+                )}
+              </div>
+            )}
+            <GuidanceCard g={buildGuidance(school, attempts)} onNext={() => nav.goAttemptForm(school.id, null)} />
+            {grid.length > 0 && <EffectCard e={effect} />}
+            <Button size="block" onClick={() => nav.goAttemptForm(school.id, null)}>
+              ＋ 結果を記録
             </Button>
           </div>
         )}
-      </div>
 
-      {school.source && (
-        <p className="px-1 pt-1 text-[11px] leading-relaxed text-neutral-400">
-          合格最低点・平均点は<b>目安</b>です。出典:
-          {school.source.url ? (
-            <a href={school.source.url} target="_blank" rel="noreferrer" className="underline">{school.source.label}</a>
-          ) : (
-            school.source.label
-          )}
-          {school.source.asof && `(${school.source.asof}時点)`}。最新・正確な情報は各校公式でご確認ください。
-        </p>
-      )}
+        {/* ── 計画:過去問プラン ── */}
+        {tab === "plan" && (
+          <div className="space-y-4">
+            <PlanCard school={school} attempts={attempts} />
+            <Button size="block" onClick={() => nav.goAttemptForm(school.id, null)}>
+              ＋ 結果を記録
+            </Button>
+          </div>
+        )}
+
+        {/* ── 記録:グリッド・伸び・科目別・記録一覧 ── */}
+        {tab === "records" && (
+          <div className="space-y-4">
+            {grid.length > 0 ? (
+              <>
+                <ScoreGrid school={school} attempts={attempts} onPick={(a) => nav.goAttemptForm(school.id, a.id)} />
+                {trend.length >= 2 && <TrendChart points={trend} />}
+                {anyRate && (
+                  <div className="rounded-2xl border border-line bg-card p-4 shadow-sm">
+                    <div className="mb-2 text-xs font-semibold text-neutral-500">科目別の平均得点率</div>
+                    <div className="space-y-1.5">
+                      {rates.map((r) => (
+                        <div key={r.name} className="flex items-center gap-2.5">
+                          <span className="w-12 flex-none text-sm font-semibold text-neutral-700">{r.name}</span>
+                          <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-neutral-100">
+                            <div className={`h-full rounded-full ${rateColor(r.rate)}`} style={{ width: `${r.rate ?? 0}%` }} />
+                          </div>
+                          <span className="nums w-10 flex-none text-right text-xs text-neutral-500">{r.rate != null ? `${r.rate}%` : "—"}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {weak && (
+                      <div className="mt-2.5 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                        弱点は <b>{weak.name}</b>(平均{weak.rate}%)。ここに時間を寄せるのが合格への近道。
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="space-y-2.5">
+                  {grid.map(({ attempt: a, gap: g }) => (
+                    <AttemptCard key={a.id} school={school} attempt={a} status={g.status} onClick={() => nav.goAttemptForm(school.id, a.id)} />
+                  ))}
+                </div>
+                <div className="grid gap-2.5 pt-1">
+                  <Button size="block" onClick={() => nav.goAttemptForm(school.id, null)}>
+                    ＋ 結果を記録
+                  </Button>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <Button variant="ghost" size="block" onClick={share}>
+                      シェア
+                    </Button>
+                    <Button variant="ghost" size="block" onClick={() => window.print()}>
+                      印刷 / PDF
+                    </Button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="rounded-2xl border border-dashed border-line bg-card p-5 text-center text-sm text-neutral-500">
+                  まだ記録がありません。<br />最初の1回は最低点に届かなくて当たり前。<b>伸び</b>を見るアプリです。
+                </div>
+                <Button size="block" onClick={() => nav.goAttemptForm(school.id, null)}>
+                  ＋ 結果を記録
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+
+        {sourceNote}
+      </div>
     </div>
   );
 
