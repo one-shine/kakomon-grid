@@ -22,11 +22,23 @@ export interface YearStat {
   avg?: number | null;
 }
 
+// 「やる過去問」1コマ(年度×回)。計画→消化→記録を回すための予定単位。
+export interface PlanSlot {
+  year: number;
+  round: string;
+}
+
 export interface School {
   id: string;
   name: string;
   sample?: boolean;
   subjects: Subject[];
+  // やる過去問の計画(年度×回のコマ)。記録するとそのコマが「済」になる。
+  plan?: PlanSlot[];
+  // 入試日(任意・YYYY-MM-DD)。残り日数とペースの逆算に使う。
+  examDate?: string;
+  // 週の学習時間割(7日×3コマの科目ラベル)。過去問の弱点から自動提案し親が微調整する。
+  timetable?: string[][];
   // 同梱の学校データから取り込んだ参考情報(任意)。手入力校では undefined。
   reference?: YearStat[];
   source?: SourceRef;
@@ -41,6 +53,8 @@ export interface Attempt {
   scores: Record<string, number | null>;
   minPass: number | null;
   memo: string;
+  // 解き直し(間違い直し)済みか。やりっぱなし防止＝努力の最小入力(1タップ)。
+  reviewed?: boolean;
   sample?: boolean;
 }
 
@@ -211,6 +225,211 @@ export function latestGap(school: School, attempts: Attempt[]): GapInfo | null {
   return grid.length ? grid[0].gap : null;
 }
 
+// ───────────────────────────────────────────────────────────
+// 過去問プラン(計画→消化→記録)。やる予定のコマ(plan)と記録済(attempts)を1枚に統合する。
+export interface PlanRow {
+  year: number;
+  round: string;
+  attempt: Attempt | null; // 済ならその記録
+  done: boolean; // 1科目以上入力済か
+  gap: GapInfo | null;
+}
+
+const slotKey = (year: number, round: string) => `${year}|${round || ""}`;
+
+// 予定コマと記録を年度降順で統合。同じ年度×回は記録(済)で上書き。
+export function buildPlanRows(school: School, attempts: Attempt[]): PlanRow[] {
+  const map = new Map<string, PlanRow>();
+  for (const p of school.plan ?? []) {
+    map.set(slotKey(p.year, p.round), { year: p.year, round: p.round || "", attempt: null, done: false, gap: null });
+  }
+  for (const a of attempts) {
+    if (a.schoolId !== school.id) continue;
+    const filled = attemptTotal(school, a).filled > 0;
+    map.set(slotKey(a.year, a.round), { year: a.year, round: a.round || "", attempt: a, done: filled, gap: computeGap(school, a) });
+  }
+  return [...map.values()].sort((x, y) =>
+    y.year !== x.year ? y.year - x.year : (x.round || "") < (y.round || "") ? -1 : (x.round || "") > (y.round || "") ? 1 : 0,
+  );
+}
+
+// 消化状況(済 / 全コマ)。グリッドを「計画の進捗」として読ませる中核指標。
+export function planProgress(school: School, attempts: Attempt[]): { done: number; total: number; rate: number } {
+  const rows = buildPlanRows(school, attempts);
+  const total = rows.length;
+  const done = rows.filter((r) => r.done).length;
+  return { done, total, rate: total ? Math.round((done / total) * 100) : 0 };
+}
+
+// 「直近N年×回なし」の予定コマを提案(学校追加時の初期プラン用)。baseYear は呼び出し側で渡す。
+export function suggestPlan(baseYear: number, count = 3): PlanSlot[] {
+  const out: PlanSlot[] = [];
+  for (let i = 0; i < count; i++) out.push({ year: baseYear - i, round: "" });
+  return out;
+}
+
+// ───────────────────────────────────────────────────────────
+// 入試日からの逆算ペース(スケジュールの背骨)。todayISO は呼び出し側で渡す(テスト可)。
+export function daysUntil(dateISO: string | undefined, todayISO: string): number | null {
+  if (!dateISO) return null;
+  const d = Date.parse(`${dateISO}T00:00:00`);
+  const t = Date.parse(`${todayISO}T00:00:00`);
+  if (Number.isNaN(d) || Number.isNaN(t)) return null;
+  return Math.round((d - t) / 86400000);
+}
+
+export interface Pace {
+  daysLeft: number | null; // 入試日までの残り日数(過ぎていたら負)
+  remain: number; // 未消化コマ数
+  daysPerSlot: number | null; // 1コマあたり何日のペースか
+  tight: boolean; // ペースが厳しい(残コマに対し日数が少ない)
+}
+
+export function buildPace(school: School, attempts: Attempt[], todayISO: string): Pace {
+  const prog = planProgress(school, attempts);
+  const remain = prog.total - prog.done;
+  const daysLeft = daysUntil(school.examDate, todayISO);
+  const daysPerSlot = daysLeft != null && daysLeft > 0 && remain > 0 ? Math.floor(daysLeft / remain) : null;
+  const tight = daysPerSlot != null && daysPerSlot < 5;
+  return { daysLeft, remain, daysPerSlot, tight };
+}
+
+// 解き直しの進捗(済コマのうち直し済みの数)。やりっぱなし防止の指標。
+export function reviewProgress(school: School, attempts: Attempt[]): { reviewed: number; done: number } {
+  const rows = buildPlanRows(school, attempts).filter((r) => r.done);
+  return { reviewed: rows.filter((r) => r.attempt?.reviewed).length, done: rows.length };
+}
+
+// 「効いているか」=努力が点に変わっているかの手応え。因果でなく事実の並置(n小では出さない)。
+export type EffectTrend = "up" | "flat" | "down" | "none";
+export interface Effect {
+  rise: number | null; // 初回→直近の合計得点率の変化(pt)
+  trend: EffectTrend;
+  reviewed: number;
+  done: number;
+}
+
+export function buildEffect(school: School, attempts: Attempt[]): Effect {
+  const grid = buildGrid(school, attempts); // 年度降順
+  const chrono = grid.slice().reverse();
+  const first = chrono.length ? totalRate(chrono[0].gap) : null;
+  const last = grid.length ? totalRate(grid[0].gap) : null;
+  const rise = chrono.length >= 2 && first != null && last != null ? last - first : null;
+  const rp = reviewProgress(school, attempts);
+  const trend: EffectTrend = rise == null ? "none" : rise > 2 ? "up" : rise < -2 ? "down" : "flat";
+  return { rise, trend, reviewed: rp.reviewed, done: rp.done };
+}
+
+// ───────────────────────────────────────────────────────────
+// 週の学習時間割。過去問の弱点から「何を・いつやるか」を自動提案し、親がタップで微調整する。
+// = 過去問の結果→学習計画(成果軸の上の差別化)。毎日入力は不要(提案ベース)。
+export const WEEK_DAYS = ["月", "火", "水", "木", "金", "土", "日"];
+// 時間軸カレンダー:7:00〜22:00 を1時間枠で(15枠/日)。Outlook風に実時刻で予定を置く。
+export const TT_HOURS = Array.from({ length: 15 }, (_, i) => 7 + i); // 7,8,…,21
+export const SCHOOL_LABEL = "学校";
+export const CRAM_LABEL = "塾";
+export const KAKOMON_LABEL = "過去問";
+
+export function emptyTimetable(): string[][] {
+  return WEEK_DAYS.map(() => TT_HOURS.map(() => ""));
+}
+// 平日 8:00〜15:00 を学校で初期化したカレンダー(よくある前提を最初から入れて手間を減らす)。
+export function defaultTimetable(): string[][] {
+  return WEEK_DAYS.map((_, d) => TT_HOURS.map((h) => (d < 5 && h >= 8 && h <= 14 ? SCHOOL_LABEL : "")));
+}
+
+function isStudyLabel(v: string): boolean {
+  return v !== "" && v !== SCHOOL_LABEL && v !== CRAM_LABEL;
+}
+
+// 週の学習量サマリ(時間)。学習(科目＋過去問)と塾の合計枠数=時間の目安。
+export function planSummary(school: School): { studyHours: number; cramHours: number } {
+  const g = school.timetable;
+  if (!g) return { studyHours: 0, cramHours: 0 };
+  let s = 0;
+  let c = 0;
+  g.forEach((row) => row?.forEach((v) => (v === CRAM_LABEL ? c++ : isStudyLabel(v) ? s++ : null)));
+  return { studyHours: s, cramHours: c };
+}
+
+// 過去問の弱点で重みづけし、学校・塾を除いた実時刻に学習を配置。過去問は週末午前に塊で。
+// base の学校・塾は保持し、空き時間だけを埋める=隙間時間の管理。
+export function suggestTimetable(school: School, attempts: Attempt[], base?: string[][]): string[][] {
+  const subjects = (school.subjects ?? []).map((s) => s.name);
+  const grid: string[][] = WEEK_DAYS.map((_, d) =>
+    TT_HOURS.map((_, hi) => {
+      const v = base?.[d]?.[hi];
+      return v === SCHOOL_LABEL || v === CRAM_LABEL ? v : "";
+    }),
+  );
+  if (!subjects.length) return grid;
+
+  const rates = subjectRates(school, attempts);
+  const weight = (name: string): number => {
+    const r = rates.find((x) => x.name === name)?.rate;
+    return r == null ? 50 : Math.max(8, 100 - r);
+  };
+  const idxOf = (h: number) => TT_HOURS.indexOf(h);
+
+  // 過去問:数時間の塊=週末(土→日)の午前 9〜12 に置く。週に最大2本。
+  const prog = planProgress(school, attempts);
+  const remain = prog.total - prog.done;
+  let placed = 0;
+  for (const [d, hrs] of [[5, [9, 10, 11]], [6, [9, 10, 11]]] as [number, number[]][]) {
+    if (placed >= Math.min(remain, 2)) break;
+    const his = hrs.map(idxOf);
+    if (his.every((hi) => grid[d][hi] === "")) {
+      his.forEach((hi) => (grid[d][hi] = KAKOMON_LABEL));
+      placed++;
+    }
+  }
+
+  // 学習枠:平日は夕方 16〜(3コマ)、週末は午後中心 12〜(5コマ)。空き時刻のみ。
+  const studySlots: [number, number][] = [];
+  for (let d = 0; d < WEEK_DAYS.length; d++) {
+    const weekend = d >= 5;
+    const target = weekend ? 5 : 3;
+    const start = weekend ? 12 : 16;
+    const end = weekend ? 20 : 21;
+    let cnt = 0;
+    for (let h = start; h <= end && cnt < target; h++) {
+      const hi = idxOf(h);
+      if (hi >= 0 && grid[d][hi] === "") {
+        studySlots.push([d, hi]);
+        cnt++;
+      }
+    }
+  }
+
+  const cells = studySlots.length;
+  const need: Record<string, number> = {};
+  const wsum = subjects.reduce((a, s) => a + weight(s), 0) || 1;
+  let assigned = 0;
+  for (const s of subjects) {
+    need[s] = Math.round((cells * weight(s)) / wsum);
+    assigned += need[s];
+  }
+  const weakestFirst = [...subjects].sort((a, b) => weight(b) - weight(a));
+  let diff = cells - assigned;
+  for (let i = 0; diff !== 0 && i < weakestFirst.length * 4; i++) {
+    const s = weakestFirst[i % weakestFirst.length];
+    if (diff > 0) (need[s]++, diff--);
+    else if (need[s] > 0) (need[s]--, diff++);
+  }
+  const labels: string[] = [];
+  for (let i = 0; i < cells; i++) {
+    let best = subjects[0];
+    let bestv = -1;
+    for (const s of subjects) if ((need[s] ?? 0) > bestv) (bestv = need[s] ?? 0), (best = s);
+    if (bestv <= 0) break;
+    labels.push(best);
+    need[best]--;
+  }
+  while (labels.length < cells) labels.push(subjects[0]);
+  studySlots.forEach(([d, hi], i) => (grid[d][hi] = labels[i] ?? ""));
+  return grid;
+}
+
 // 同梱データの参考値から、その年度・回に当たる合格最低点/平均点を引く(目安)。
 export function findReference(school: School, year: number, round: string): YearStat | null {
   const refs = school.reference ?? [];
@@ -222,6 +441,105 @@ export function findReference(school: School, year: number, round: string): Year
     refs.find((x) => x.year === year) ??
     null
   );
+}
+
+// ───────────────────────────────────────────────────────────
+// 指針(guidance):記録した得点から「射程圏か・あと何点・どの科目で・伸びているか・次の一手」を返す。
+// 可視化で終わらせず親の判断と不安軽減につなげる中核(価値=記録→指針)。すべて「目安」。
+export type GuidanceTone = "good" | "warn" | "hard" | "info";
+export interface Guidance {
+  tone: GuidanceTone;
+  headline: string; // 一言の見立て
+  detail: string; // あと何点 等の具体
+  lever?: string; // どの科目をどれだけ上げれば届くか
+  encouragement?: string; // 自分の伸びに基づく励まし
+  nextAction: string; // 次の一手(短文)
+}
+
+export function buildGuidance(school: School, attempts: Attempt[]): Guidance {
+  const grid = buildGrid(school, attempts); // 年度降順
+  const prog = planProgress(school, attempts);
+  if (!grid.length) {
+    return {
+      tone: "info",
+      headline: prog.total > 0 ? `やる過去問が${prog.total}コマ。まず1年分を記録しよう` : "まず1年分を記録しよう",
+      detail: "過去問の得点を入れると、合格最低点との距離と「伸び」が見えます。",
+      nextAction: "結果を記録する",
+    };
+  }
+  const remain = prog.total - prog.done;
+  const latest = grid[0].gap;
+
+  // 伸び:時系列(古い→新しい)の合計得点率の変化
+  const chrono = grid.slice().reverse();
+  const firstRate = totalRate(chrono[0].gap);
+  const lastRate = totalRate(latest);
+  const riseRate =
+    chrono.length >= 2 && firstRate != null && lastRate != null ? lastRate - firstRate : null;
+  const encouragement =
+    riseRate != null && riseRate > 0
+      ? `初回から得点率 +${riseRate}pt。伸びは出ている。`
+      : riseRate != null && riseRate < 0
+        ? `直近は得点率 ${riseRate}pt。波がある時期。`
+        : undefined;
+
+  const weak = weakestSubject(school, attempts);
+
+  if (latest.minPass == null || latest.gap == null) {
+    return {
+      tone: "info",
+      headline: "合格最低点を入れると「あと何点」が分かる",
+      detail: "この年度の合格最低点(目安でも可)を入れると、射程圏か・あと何点かを判定します。",
+      ...(encouragement ? { encouragement } : {}),
+      nextAction: "合格最低点を追記する",
+    };
+  }
+
+  // lever:弱点科目で差を埋める道筋(目安)
+  let lever: string | undefined;
+  if (weak && weak.rate != null && latest.gap < 0) {
+    const need = -latest.gap;
+    const target = Math.min(100, weak.rate + Math.ceil((need / weak.max) * 100));
+    const pts = Math.round(((target - weak.rate) / 100) * weak.max);
+    lever =
+      target > weak.rate && pts > 0
+        ? `弱点の${weak.name}(平均${weak.rate}%)を${target}%まで上げると約+${pts}点。${pts >= need ? "射程圏に入る。" : "差を縮められる。"}`
+        : `弱点は${weak.name}(平均${weak.rate}%)。複数科目で底上げを。`;
+  } else if (weak && weak.rate != null) {
+    lever = `弱点の${weak.name}(平均${weak.rate}%)を固めると合格圏が安定する。`;
+  }
+  const next = remain > 0 ? `${weak ? `${weak.name}を重点に、` : ""}残り${remain}コマを進める` : weak ? `${weak.name}を重点に、もう1年分` : "もう1年分を記録";
+
+  if (latest.status === "PASS") {
+    return {
+      tone: "good",
+      headline: "合格圏。この調子を維持",
+      detail: `合格最低点を +${latest.gap}点 上回っている。`,
+      ...(lever ? { lever } : {}),
+      ...(encouragement ? { encouragement } : {}),
+      nextAction: weak ? `${weak.name}を固めて安定させる` : "他の年度でも試す",
+    };
+  }
+  if (latest.status === "NEAR") {
+    return {
+      tone: "warn",
+      headline: "あと一歩で射程圏",
+      detail: `合格最低点まで あと${-latest.gap}点。`,
+      ...(lever ? { lever } : {}),
+      ...(encouragement ? { encouragement } : {}),
+      nextAction: next,
+    };
+  }
+  // BELOW
+  const rising = riseRate != null && riseRate > 0;
+  return {
+    tone: rising ? "warn" : "hard",
+    headline: rising ? "まだ届かないが、伸びは出ている" : "重点配分で差を詰める",
+    detail: `合格最低点まで あと${-latest.gap}点。${rising ? "焦らず積み上げを。" : ""}`.trim(),
+    ...(lever ? { lever } : {}),
+    ...(encouragement ? { encouragement } : {}),
+    nextAction: next,
+  };
 }
 
 export function buildShareText(school: School, attempt: Attempt, gapInfo: GapInfo): string {
@@ -283,6 +601,21 @@ export function migrateState(raw: unknown): AppState {
       subjects: (Array.isArray(s.subjects) ? s.subjects : [])
         .filter((x) => x && x.name)
         .map((x) => ({ name: String(x.name), max: Number(x.max) || 100 })),
+      ...(Array.isArray(s.plan) && s.plan.length
+        ? {
+            plan: s.plan
+              .filter((p): p is PlanSlot => !!p && Number.isFinite(Number(p.year)))
+              .map((p) => ({ year: Number(p.year), round: p.round ? String(p.round) : "" })),
+          }
+        : {}),
+      ...(s.examDate ? { examDate: String(s.examDate) } : {}),
+      ...(Array.isArray(s.timetable) && s.timetable.length === WEEK_DAYS.length
+        ? {
+            timetable: s.timetable.map((row) =>
+              TT_HOURS.map((_, b) => (Array.isArray(row) && row[b] != null ? String(row[b]) : "")),
+            ),
+          }
+        : {}),
       ...(Array.isArray(s.reference) && s.reference.length
         ? {
             reference: s.reference
@@ -312,6 +645,7 @@ export function migrateState(raw: unknown): AppState {
       scores: a.scores && typeof a.scores === "object" ? a.scores : {},
       minPass: isFilled(a.minPass) ? Number(a.minPass) : null,
       memo: a.memo ? String(a.memo) : "",
+      ...(a.reviewed ? { reviewed: true } : {}),
       sample: !!a.sample,
     }));
   return { version: 1, schools, attempts };

@@ -206,6 +206,153 @@ describe("migrateState で reference/source を保持", () => {
   it("sourceを保持", () => expect(mig.schools[0].source?.url).toBe("https://example.jp"));
 });
 
+describe("buildGuidance(記録→指針)", () => {
+  it("記録ゼロは『まず1年分』のinfo", () => {
+    const g = L.buildGuidance(school4, []);
+    expect(g.tone).toBe("info");
+    expect(g.headline).toContain("まず1年分");
+  });
+  it("最低点未入力は『合格最低点を入れると』のinfo", () => {
+    const noLine: Attempt = { id: "n1", schoolId: "sc1", year: 2025, round: "", scores: { 国語: 100, 算数: 120, 理科: 60, 社会: 70 }, minPass: null, memo: "" };
+    const g = L.buildGuidance(school4, [noLine]);
+    expect(g.tone).toBe("info");
+    expect(g.headline).toContain("合格最低点");
+  });
+  it("合格圏はgoodで『この調子』", () => {
+    // 合計350 / 最低点320 → +30 = PASS
+    const a: Attempt = { id: "p1", schoolId: "sc1", year: 2025, round: "", scores: { 国語: 110, 算数: 120, 理科: 60, 社会: 60 }, minPass: 320, memo: "" };
+    const g = L.buildGuidance(school4, [a]);
+    expect(g.tone).toBe("good");
+    expect(g.detail).toContain("+30");
+  });
+  it("BELOWは弱点科目で『あと何点』のleverを返す", () => {
+    // 合計260 / 最低点320 → -60。理科が弱点。
+    const a: Attempt = { id: "b1", schoolId: "sc1", year: 2025, round: "", scores: { 国語: 90, 算数: 90, 理科: 30, 社会: 50 }, minPass: 320, memo: "" };
+    const g = L.buildGuidance(school4, [a]);
+    expect(g.detail).toContain("あと60点");
+    expect(g.lever).toContain("理科");
+  });
+  it("伸びていれば励ましを返す", () => {
+    const old: Attempt = { id: "o1", schoolId: "sc1", year: 2024, round: "", scores: { 国語: 60, 算数: 60, 理科: 40, 社会: 40 }, minPass: 320, memo: "" };
+    const recent: Attempt = { id: "r1", schoolId: "sc1", year: 2025, round: "", scores: { 国語: 110, 算数: 120, 理科: 60, 社会: 60 }, minPass: 320, memo: "" };
+    const g = L.buildGuidance(school4, [old, recent]);
+    expect(g.encouragement).toContain("伸び");
+  });
+});
+
+describe("過去問プラン(buildPlanRows / planProgress / suggestPlan)", () => {
+  const planned: School = { ...school4, plan: [{ year: 2025, round: "①" }, { year: 2024, round: "①" }, { year: 2023, round: "①" }] };
+  const doneOne: Attempt = { id: "p1", schoolId: "sc1", year: 2025, round: "①", scores: { 国語: 100, 算数: 120, 理科: 60, 社会: 70 }, minPass: 320, memo: "" };
+
+  it("予定コマと記録を年度降順で統合", () => {
+    const rows = L.buildPlanRows(planned, [doneOne]);
+    expect(rows.map((r) => r.year)).toEqual([2025, 2024, 2023]);
+  });
+  it("記録のあるコマは done=true", () => {
+    const rows = L.buildPlanRows(planned, [doneOne]);
+    expect(rows.find((r) => r.year === 2025)?.done).toBe(true);
+    expect(rows.find((r) => r.year === 2024)?.done).toBe(false);
+  });
+  it("予定外の年度を記録しても統合される(コマが増える)", () => {
+    const extra: Attempt = { ...doneOne, id: "p2", year: 2022, round: "①" };
+    const rows = L.buildPlanRows(planned, [doneOne, extra]);
+    expect(rows.map((r) => r.year)).toEqual([2025, 2024, 2023, 2022]);
+  });
+  it("消化率=済/全コマ", () => {
+    expect(L.planProgress(planned, [doneOne])).toEqual({ done: 1, total: 3, rate: 33 });
+  });
+  it("空入力(0科目)のコマは done=false", () => {
+    const empty: Attempt = { id: "e1", schoolId: "sc1", year: 2024, round: "①", scores: {}, minPass: null, memo: "" };
+    expect(L.buildPlanRows(planned, [empty]).find((r) => r.year === 2024)?.done).toBe(false);
+  });
+  it("suggestPlan は直近N年×回なしを返す", () => {
+    expect(L.suggestPlan(2025, 3)).toEqual([{ year: 2025, round: "" }, { year: 2024, round: "" }, { year: 2023, round: "" }]);
+  });
+  it("migrateState が plan を保持", () => {
+    const m = L.migrateState({ schools: [{ id: "x", name: "A", subjects: [{ name: "国", max: 100 }], plan: [{ year: 2025, round: "①" }, { year: "bad" }] }], attempts: [] });
+    expect(m.schools[0].plan).toEqual([{ year: 2025, round: "①" }]);
+  });
+});
+
+describe("入試日ペース・解き直し・効いているか", () => {
+  const planned: School = { ...school4, plan: [{ year: 2025, round: "①" }, { year: 2024, round: "①" }, { year: 2023, round: "①" }], examDate: "2026-02-01" };
+  const a25: Attempt = { id: "p1", schoolId: "sc1", year: 2025, round: "①", scores: { 国語: 110, 算数: 120, 理科: 60, 社会: 60 }, minPass: 320, memo: "", reviewed: true };
+  const a24: Attempt = { id: "p0", schoolId: "sc1", year: 2024, round: "①", scores: { 国語: 80, 算数: 80, 理科: 40, 社会: 40 }, minPass: 320, memo: "" };
+
+  it("daysUntil:残り日数", () => {
+    expect(L.daysUntil("2026-02-01", "2026-01-01")).toBe(31);
+    expect(L.daysUntil(undefined, "2026-01-01")).toBe(null);
+  });
+  it("buildPace:未消化と日数からペース", () => {
+    const p = L.buildPace(planned, [a25], "2026-01-01"); // 残2コマ・31日
+    expect(p.remain).toBe(2);
+    expect(p.daysLeft).toBe(31);
+    expect(p.daysPerSlot).toBe(15);
+  });
+  it("reviewProgress:済のうち直し済み数", () => {
+    expect(L.reviewProgress(planned, [a25, a24])).toEqual({ reviewed: 1, done: 2 });
+  });
+  it("buildEffect:伸びと直し(因果でなく事実)", () => {
+    // 2024は得点率48%相当→2025は高い。最新が上=up
+    const e = L.buildEffect(planned, [a25, a24]);
+    expect(e.trend).toBe("up");
+    expect(e.rise).not.toBeNull();
+    expect(e.reviewed).toBe(1);
+  });
+  it("buildEffect:記録1件は trend=none", () => {
+    expect(L.buildEffect(planned, [a25]).trend).toBe("none");
+  });
+  it("migrateState が examDate / reviewed を保持", () => {
+    const m = L.migrateState({ schools: [{ id: "x", name: "A", subjects: [{ name: "国", max: 100 }], examDate: "2026-02-01" }], attempts: [{ id: "a", schoolId: "x", year: 2025, round: "", scores: { 国: 60 }, minPass: null, memo: "", reviewed: true }] });
+    expect(m.schools[0].examDate).toBe("2026-02-01");
+    expect(m.attempts[0].reviewed).toBe(true);
+  });
+});
+
+describe("週の学習時間割(suggestTimetable)", () => {
+  const planned: School = { ...school4, plan: [{ year: 2025, round: "①" }, { year: 2024, round: "①" }] };
+  // 理科だけ著しく低い→弱点。配分が最も多くなるはず。
+  const a: Attempt = { id: "t1", schoolId: "sc1", year: 2025, round: "①", scores: { 国語: 135, 算数: 135, 理科: 30, 社会: 90 }, minPass: 320, memo: "" };
+
+  it("7日×15枠(7:00〜21:00)を返す", () => {
+    const g = L.suggestTimetable(planned, [a]);
+    expect(g.length).toBe(7);
+    g.forEach((row) => expect(row.length).toBe(L.TT_HOURS.length));
+  });
+  it("弱点(理科)が最も多く配分される", () => {
+    const g = L.suggestTimetable(planned, [a]);
+    const flat = g.flat();
+    const count = (s: string) => flat.filter((x) => x === s).length;
+    expect(count("理科")).toBeGreaterThanOrEqual(count("国語"));
+    expect(count("理科")).toBeGreaterThanOrEqual(count("社会"));
+  });
+  it("過去問は週末(土日)の午前に入り、平日には入らない", () => {
+    const g = L.suggestTimetable(planned, []); // 2コマ未消化
+    const weekend = [...g[5], ...g[6]];
+    expect(weekend.filter((x) => x === "過去問").length).toBeGreaterThan(0);
+    const weekday = [...g[0], ...g[1], ...g[2], ...g[3], ...g[4]];
+    expect(weekday.filter((x) => x === "過去問").length).toBe(0);
+  });
+  it("学校・塾の枠は提案で保持される(空き時刻だけ埋める)", () => {
+    const base = L.defaultTimetable(); // 平日8-15が学校
+    base[1][L.TT_HOURS.indexOf(17)] = "塾"; // 火17:00を塾に
+    const g = L.suggestTimetable(planned, [a], base);
+    expect(g[1][L.TT_HOURS.indexOf(17)]).toBe("塾");
+    expect(g[0][L.TT_HOURS.indexOf(9)]).toBe("学校"); // 月9:00は学校のまま
+  });
+  it("defaultTimetable は平日8-15を学校で初期化", () => {
+    const g = L.defaultTimetable();
+    expect(g[0][L.TT_HOURS.indexOf(9)]).toBe("学校"); // 月9:00
+    expect(g[5][L.TT_HOURS.indexOf(9)]).toBe(""); // 土9:00は空き
+  });
+  it("migrateState が timetable を15枠に正規化", () => {
+    const tt = Array.from({ length: 7 }, () => ["学校", "", "過去問"]);
+    const m = L.migrateState({ schools: [{ id: "x", name: "A", subjects: [{ name: "国語", max: 100 }], timetable: tt }], attempts: [] });
+    expect(m.schools[0].timetable?.length).toBe(7);
+    expect(m.schools[0].timetable?.[0].length).toBe(L.TT_HOURS.length);
+  });
+});
+
 describe("SCHOOL_CATALOG(同梱データ方針)", () => {
   it("全エントリに出典がある", async () => {
     const { SCHOOL_CATALOG } = await import("./schoolCatalog");
