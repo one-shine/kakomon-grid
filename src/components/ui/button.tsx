@@ -9,9 +9,9 @@ const buttonVariants = cva(
     variants: {
       variant: {
         primary: "bg-brand text-white hover:bg-brand-ink active:opacity-90 shadow-sm",
-        ghost: "border border-line bg-transparent text-neutral-900 hover:bg-neutral-50",
+        ghost: "border border-neutral-200 bg-transparent text-neutral-900 hover:bg-neutral-50",
         danger: "bg-red-600 text-white hover:bg-red-700",
-        dangerGhost: "border border-line bg-transparent text-red-600 hover:bg-red-50",
+        dangerGhost: "border border-neutral-200 bg-transparent text-red-600 hover:bg-red-50",
       },
       size: {
         block: "w-full px-4 py-3.5 text-base",
