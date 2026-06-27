@@ -10,10 +10,11 @@ export function SchoolForm() {
   const { schoolId } = useNav();
   const nav = useNav();
   const toast = useToast();
-  const { schools, addSchool, addSchoolFull, updateSchool, removeSchool } = useStore();
+  const { schools, addSchool, addSchoolFull, updateSchool, removeSchool, setExamDate } = useStore();
   const editing = schoolId ? schools.find((s) => s.id === schoolId) ?? null : null;
 
   const [name, setName] = useState(editing?.name ?? "");
+  const [examDate, setExamDateLocal] = useState(editing?.examDate ?? "");
   const [subjects, setSubjects] = useState<Subject[]>(
     editing ? editing.subjects.map((s) => ({ ...s })) : SUBJECT_PRESETS[0].subjects.map((s) => ({ ...s })),
   );
@@ -59,16 +60,16 @@ export function SchoolForm() {
       setErrors(v.errors);
       return;
     }
+    let id: string;
     if (editing) {
       updateSchool(editing.id, draft.name, draft.subjects);
-      nav.goDetail(editing.id);
+      id = editing.id;
     } else {
       // カタログから選んだ場合は出典(公式リンク)を必ず保持。手入力は素のまま。
-      const id = picked
-        ? addSchoolFull({ ...draft, reference: reference ?? [], source })
-        : addSchool(draft.name, draft.subjects);
-      nav.goDetail(id);
+      id = picked ? addSchoolFull({ ...draft, reference: reference ?? [], source }) : addSchool(draft.name, draft.subjects);
     }
+    setExamDate(id, examDate); // 入試日(空なら解除)
+    nav.goDetail(id);
     toast.show("保存しました");
   }
 
@@ -112,6 +113,15 @@ export function SchoolForm() {
           maxLength={30}
           placeholder="例:桜花中"
           onChange={(e) => setName(e.target.value)}
+        />
+      </Field>
+
+      <Field label="入試日(任意・残り日数とペースの逆算に使う)">
+        <input
+          className={inputCls}
+          type="date"
+          value={examDate}
+          onChange={(e) => setExamDateLocal(e.target.value)}
         />
       </Field>
 

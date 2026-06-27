@@ -19,6 +19,7 @@ interface Store {
   // plan(やる過去問の計画)
   addPlanSlot: (schoolId: string, slot: PlanSlot) => void;
   removePlanSlot: (schoolId: string, year: number, round: string) => void;
+  setExamDate: (schoolId: string, date: string) => void;
   // attempts
   addAttempt: (a: Omit<Attempt, "id" | "sample">) => string;
   updateAttempt: (id: string, patch: Partial<Attempt>) => void;
@@ -64,6 +65,9 @@ export const useStore = create<Store>()(
               : sc,
           ),
         }));
+      },
+      setExamDate(schoolId, date) {
+        set((s) => ({ schools: s.schools.map((sc) => (sc.id === schoolId ? { ...sc, examDate: date || undefined } : sc)) }));
       },
       updateSchool(id, name, subjects) {
         // 名前・科目だけ更新。reference/source(同梱データ由来)は保持。
@@ -112,8 +116,9 @@ export const useStore = create<Store>()(
             { year: 2024, round: "①" },
             { year: 2023, round: "①" },
           ],
+          examDate: "2027-02-01", // 入試日の見本(残り日数・ペースの逆算を見せる)
         };
-        const a1: Attempt = { id: uuid(), schoolId: sc.id, year: 2025, round: "①", scores: { 国語: 98, 算数: 105, 理科: 62, 社会: 71 }, minPass: 322, memo: "", sample: true };
+        const a1: Attempt = { id: uuid(), schoolId: sc.id, year: 2025, round: "①", scores: { 国語: 98, 算数: 105, 理科: 62, 社会: 71 }, minPass: 322, memo: "", reviewed: true, sample: true };
         const a2: Attempt = { id: uuid(), schoolId: sc.id, year: 2024, round: "①", scores: { 国語: 92, 算数: 88, 理科: 55, 社会: 64 }, minPass: 315, memo: "算数で時間切れ", sample: true };
         set((s) => ({ schools: [...s.schools, sc], attempts: [...s.attempts, a1, a2] }));
         return sc.id;

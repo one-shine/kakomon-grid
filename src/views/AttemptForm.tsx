@@ -34,6 +34,7 @@ export function AttemptForm() {
   });
   const [minPass, setMinPass] = useState<string>(editing && editing.minPass != null ? String(editing.minPass) : "");
   const [memo, setMemo] = useState(editing?.memo ?? "");
+  const [reviewed, setReviewed] = useState<boolean>(editing?.reviewed ?? false);
   const [errors, setErrors] = useState<string[]>([]);
 
   if (!school) {
@@ -61,6 +62,7 @@ export function AttemptForm() {
       scores: collectScores(),
       minPass: minPass === "" ? null : Number(minPass),
       memo: memo.trim(),
+      reviewed,
     };
     const v = validateAttempt(school!, draft);
     if (!v.ok) {
@@ -163,6 +165,21 @@ export function AttemptForm() {
       <Field label="メモ(任意)">
         <input className={inputCls} maxLength={60} placeholder="時間配分きつい 等" value={memo} onChange={(e) => setMemo(e.target.value)} />
       </Field>
+
+      {/* 解き直し=やりっぱなし防止の最小入力(任意・1タップ) */}
+      <button
+        type="button"
+        onClick={() => setReviewed((v) => !v)}
+        className={`flex w-full items-center gap-2.5 rounded-xl border px-3.5 py-3 text-left transition-colors ${
+          reviewed ? "border-shu/30 bg-shu/10" : "border-line bg-card"
+        }`}
+      >
+        <span className={`grid h-5 w-5 flex-none place-items-center rounded-md text-xs ${reviewed ? "bg-shu text-white" : "border border-sumi/30 text-transparent"}`}>✓</span>
+        <span className="flex-1">
+          <span className={`block text-sm font-semibold ${reviewed ? "text-shu" : "text-sumi/80"}`}>解き直しまで終えた</span>
+          <span className="block text-xs text-sumi/45">点を取るより、間違い直しが伸びの近道</span>
+        </span>
+      </button>
 
       {errors.length > 0 && (
         <div className="text-sm text-red-600">

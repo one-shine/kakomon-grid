@@ -35,6 +35,8 @@ export interface School {
   subjects: Subject[];
   // やる過去問の計画(年度×回のコマ)。記録するとそのコマが「済」になる。
   plan?: PlanSlot[];
+  // 入試日(任意・YYYY-MM-DD)。残り日数とペースの逆算に使う。
+  examDate?: string;
   // 同梱の学校データから取り込んだ参考情報(任意)。手入力校では undefined。
   reference?: YearStat[];
   source?: SourceRef;
@@ -49,6 +51,8 @@ export interface Attempt {
   scores: Record<string, number | null>;
   minPass: number | null;
   memo: string;
+  // 解き直し(間違い直し)済みか。やりっぱなし防止＝努力の最小入力(1タップ)。
+  reviewed?: boolean;
   sample?: boolean;
 }
 
@@ -262,6 +266,58 @@ export function suggestPlan(baseYear: number, count = 3): PlanSlot[] {
   return out;
 }
 
+// ───────────────────────────────────────────────────────────
+// 入試日からの逆算ペース(スケジュールの背骨)。todayISO は呼び出し側で渡す(テスト可)。
+export function daysUntil(dateISO: string | undefined, todayISO: string): number | null {
+  if (!dateISO) return null;
+  const d = Date.parse(`${dateISO}T00:00:00`);
+  const t = Date.parse(`${todayISO}T00:00:00`);
+  if (Number.isNaN(d) || Number.isNaN(t)) return null;
+  return Math.round((d - t) / 86400000);
+}
+
+export interface Pace {
+  daysLeft: number | null; // 入試日までの残り日数(過ぎていたら負)
+  remain: number; // 未消化コマ数
+  daysPerSlot: number | null; // 1コマあたり何日のペースか
+  tight: boolean; // ペースが厳しい(残コマに対し日数が少ない)
+}
+
+export function buildPace(school: School, attempts: Attempt[], todayISO: string): Pace {
+  const prog = planProgress(school, attempts);
+  const remain = prog.total - prog.done;
+  const daysLeft = daysUntil(school.examDate, todayISO);
+  const daysPerSlot = daysLeft != null && daysLeft > 0 && remain > 0 ? Math.floor(daysLeft / remain) : null;
+  const tight = daysPerSlot != null && daysPerSlot < 5;
+  return { daysLeft, remain, daysPerSlot, tight };
+}
+
+// 解き直しの進捗(済コマのうち直し済みの数)。やりっぱなし防止の指標。
+export function reviewProgress(school: School, attempts: Attempt[]): { reviewed: number; done: number } {
+  const rows = buildPlanRows(school, attempts).filter((r) => r.done);
+  return { reviewed: rows.filter((r) => r.attempt?.reviewed).length, done: rows.length };
+}
+
+// 「効いているか」=努力が点に変わっているかの手応え。因果でなく事実の並置(n小では出さない)。
+export type EffectTrend = "up" | "flat" | "down" | "none";
+export interface Effect {
+  rise: number | null; // 初回→直近の合計得点率の変化(pt)
+  trend: EffectTrend;
+  reviewed: number;
+  done: number;
+}
+
+export function buildEffect(school: School, attempts: Attempt[]): Effect {
+  const grid = buildGrid(school, attempts); // 年度降順
+  const chrono = grid.slice().reverse();
+  const first = chrono.length ? totalRate(chrono[0].gap) : null;
+  const last = grid.length ? totalRate(grid[0].gap) : null;
+  const rise = chrono.length >= 2 && first != null && last != null ? last - first : null;
+  const rp = reviewProgress(school, attempts);
+  const trend: EffectTrend = rise == null ? "none" : rise > 2 ? "up" : rise < -2 ? "down" : "flat";
+  return { rise, trend, reviewed: rp.reviewed, done: rp.done };
+}
+
 // 同梱データの参考値から、その年度・回に当たる合格最低点/平均点を引く(目安)。
 export function findReference(school: School, year: number, round: string): YearStat | null {
   const refs = school.reference ?? [];
@@ -440,6 +496,7 @@ export function migrateState(raw: unknown): AppState {
               .map((p) => ({ year: Number(p.year), round: p.round ? String(p.round) : "" })),
           }
         : {}),
+      ...(s.examDate ? { examDate: String(s.examDate) } : {}),
       ...(Array.isArray(s.reference) && s.reference.length
         ? {
             reference: s.reference
@@ -469,6 +526,7 @@ export function migrateState(raw: unknown): AppState {
       scores: a.scores && typeof a.scores === "object" ? a.scores : {},
       minPass: isFilled(a.minPass) ? Number(a.minPass) : null,
       memo: a.memo ? String(a.memo) : "",
+      ...(a.reviewed ? { reviewed: true } : {}),
       sample: !!a.sample,
     }));
   return { version: 1, schools, attempts };

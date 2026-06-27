@@ -274,6 +274,41 @@ describe("過去問プラン(buildPlanRows / planProgress / suggestPlan)", () =>
   });
 });
 
+describe("入試日ペース・解き直し・効いているか", () => {
+  const planned: School = { ...school4, plan: [{ year: 2025, round: "①" }, { year: 2024, round: "①" }, { year: 2023, round: "①" }], examDate: "2026-02-01" };
+  const a25: Attempt = { id: "p1", schoolId: "sc1", year: 2025, round: "①", scores: { 国語: 110, 算数: 120, 理科: 60, 社会: 60 }, minPass: 320, memo: "", reviewed: true };
+  const a24: Attempt = { id: "p0", schoolId: "sc1", year: 2024, round: "①", scores: { 国語: 80, 算数: 80, 理科: 40, 社会: 40 }, minPass: 320, memo: "" };
+
+  it("daysUntil:残り日数", () => {
+    expect(L.daysUntil("2026-02-01", "2026-01-01")).toBe(31);
+    expect(L.daysUntil(undefined, "2026-01-01")).toBe(null);
+  });
+  it("buildPace:未消化と日数からペース", () => {
+    const p = L.buildPace(planned, [a25], "2026-01-01"); // 残2コマ・31日
+    expect(p.remain).toBe(2);
+    expect(p.daysLeft).toBe(31);
+    expect(p.daysPerSlot).toBe(15);
+  });
+  it("reviewProgress:済のうち直し済み数", () => {
+    expect(L.reviewProgress(planned, [a25, a24])).toEqual({ reviewed: 1, done: 2 });
+  });
+  it("buildEffect:伸びと直し(因果でなく事実)", () => {
+    // 2024は得点率48%相当→2025は高い。最新が上=up
+    const e = L.buildEffect(planned, [a25, a24]);
+    expect(e.trend).toBe("up");
+    expect(e.rise).not.toBeNull();
+    expect(e.reviewed).toBe(1);
+  });
+  it("buildEffect:記録1件は trend=none", () => {
+    expect(L.buildEffect(planned, [a25]).trend).toBe("none");
+  });
+  it("migrateState が examDate / reviewed を保持", () => {
+    const m = L.migrateState({ schools: [{ id: "x", name: "A", subjects: [{ name: "国", max: 100 }], examDate: "2026-02-01" }], attempts: [{ id: "a", schoolId: "x", year: 2025, round: "", scores: { 国: 60 }, minPass: null, memo: "", reviewed: true }] });
+    expect(m.schools[0].examDate).toBe("2026-02-01");
+    expect(m.attempts[0].reviewed).toBe(true);
+  });
+});
+
 describe("SCHOOL_CATALOG(同梱データ方針)", () => {
   it("全エントリに出典がある", async () => {
     const { SCHOOL_CATALOG } = await import("./schoolCatalog");

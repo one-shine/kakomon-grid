@@ -6,7 +6,8 @@ import { TrendChart, type TrendPoint } from "@/components/ui/TrendChart";
 import { ScoreGrid } from "@/components/ui/ScoreGrid";
 import { GuidanceCard } from "@/components/ui/GuidanceCard";
 import { PlanCard } from "@/components/ui/PlanCard";
-import { buildGrid, buildGuidance, subjectRates, weakestSubject, buildShareText, computeGap, findReference, type GapStatus } from "@/lib/logic";
+import { EffectCard } from "@/components/ui/EffectCard";
+import { buildGrid, buildGuidance, buildPace, buildEffect, subjectRates, weakestSubject, buildShareText, computeGap, findReference, type GapStatus } from "@/lib/logic";
 import type { Attempt, School } from "@/lib/logic";
 
 const GAP_TEXT: Record<GapStatus, string> = {
@@ -39,7 +40,7 @@ export function SchoolDetail() {
   const { schoolId } = useNav();
   const nav = useNav();
   const toast = useToast();
-  const { schools, attempts } = useStore();
+  const { schools, attempts, updateAttempt } = useStore();
   const school = schools.find((s) => s.id === schoolId);
   if (!school) {
     nav.goHome();
@@ -48,6 +49,9 @@ export function SchoolDetail() {
 
   const grid = buildGrid(school, attempts); // 年度降順
   const hasPlan = (school.plan?.length ?? 0) > 0;
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const pace = buildPace(school, attempts, todayISO);
+  const effect = buildEffect(school, attempts);
   const rates = subjectRates(school, attempts);
   const anyRate = rates.some((r) => r.rate != null);
   const weak = weakestSubject(school, attempts);
@@ -98,7 +102,35 @@ export function SchoolDetail() {
         </Button>
       </div>
 
+      {/* 計画/スケジュールの一行ステータス(本番まで・未消化・直し)=PDCAが上から読める */}
+      {(pace.daysLeft != null || pace.remain > 0 || effect.done > 0) && (
+        <div className="no-print flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-sumi/[0.04] px-4 py-2.5 text-sm">
+          {pace.daysLeft != null && pace.daysLeft >= 0 && (
+            <span className="text-sumi/80">
+              本番まで <b className="nums text-sumi">{pace.daysLeft}</b>日
+            </span>
+          )}
+          {pace.remain > 0 && (
+            <span className="text-sumi/70">
+              未消化 <b className="nums text-sumi">{pace.remain}</b>コマ
+              {pace.daysPerSlot != null && <span className={`ml-1 text-xs ${pace.tight ? "text-rose-600" : "text-sumi/50"}`}>({pace.daysPerSlot}日に1コマ)</span>}
+            </span>
+          )}
+          {effect.done > 0 && (
+            <span className="text-sumi/70">
+              直し <b className="nums text-sumi">{effect.reviewed}/{effect.done}</b>
+            </span>
+          )}
+        </div>
+      )}
+
       <GuidanceCard g={buildGuidance(school, attempts)} onNext={() => nav.goAttemptForm(school.id, null)} />
+
+      {grid.length > 0 && (
+        <div className="no-print">
+          <EffectCard e={effect} />
+        </div>
+      )}
 
       <div className="no-print">
         <PlanCard school={school} attempts={attempts} />
@@ -187,10 +219,12 @@ export function SchoolDetail() {
     // 合格最低点までのゲージ(0..100%)。最低点なしはゲージ無し。
     const pct = g.minPass != null && g.maxTotal > 0 ? Math.max(0, Math.min(100, (g.total / Math.max(g.minPass, 1)) * 100)) : null;
     return (
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onClick}
-        className="block w-full rounded-2xl border border-line bg-card p-4 text-left shadow-sm active:scale-[0.99]"
+        onKeyDown={(ev) => (ev.key === "Enter" || ev.key === " ") && onClick()}
+        className="block w-full cursor-pointer rounded-2xl border border-line bg-card p-4 text-left shadow-sm active:scale-[0.99]"
       >
         <div className="flex items-center justify-between">
           <div>
@@ -215,7 +249,23 @@ export function SchoolDetail() {
             <div className={`h-full rounded-full ${GAP_BG[status]}`} style={{ width: `${pct}%` }} />
           </div>
         )}
-      </button>
+        {/* 解き直しトグル=努力の最小入力(1タップ・任意)。やりっぱなし防止。 */}
+        <button
+          type="button"
+          onClick={(ev) => {
+            ev.stopPropagation();
+            updateAttempt(a.id, { reviewed: !a.reviewed });
+          }}
+          className={`mt-2.5 inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${
+            a.reviewed ? "border-shu/30 bg-shu/10 text-shu" : "border-line bg-card text-sumi/45"
+          }`}
+        >
+          <span className={`grid h-3.5 w-3.5 place-items-center rounded-full text-[9px] ${a.reviewed ? "bg-shu text-white" : "border border-sumi/30"}`}>
+            {a.reviewed ? "✓" : ""}
+          </span>
+          {a.reviewed ? "解き直し済み" : "解き直しは？"}
+        </button>
+      </div>
     );
   }
 }
