@@ -21,6 +21,8 @@ interface Store {
   removePlanSlot: (schoolId: string, year: number, round: string) => void;
   setExamDate: (schoolId: string, date: string) => void;
   setTimetable: (schoolId: string, timetable: string[][]) => void;
+  // 受験日程・公式リンク等のメタ情報を部分更新(空文字は解除)
+  updateSchoolMeta: (schoolId: string, patch: Partial<Pick<School, "applyStart" | "applyEnd" | "examDate" | "resultDate" | "admissionsUrl">>) => void;
   // attempts
   addAttempt: (a: Omit<Attempt, "id" | "sample">) => string;
   updateAttempt: (id: string, patch: Partial<Attempt>) => void;
@@ -75,6 +77,19 @@ export const useStore = create<Store>()(
       setTimetable(schoolId, timetable) {
         set((s) => ({ schools: s.schools.map((sc) => (sc.id === schoolId ? { ...sc, timetable } : sc)) }));
       },
+      updateSchoolMeta(schoolId, patch) {
+        set((s) => ({
+          schools: s.schools.map((sc) => {
+            if (sc.id !== schoolId) return sc;
+            const next = { ...sc };
+            for (const [k, v] of Object.entries(patch)) {
+              if (v) (next as Record<string, unknown>)[k] = v;
+              else delete (next as Record<string, unknown>)[k]; // 空は解除
+            }
+            return next;
+          }),
+        }));
+      },
       updateSchool(id, name, subjects) {
         // 名前・科目だけ更新。reference/source(同梱データ由来)は保持。
         set((s) => ({
@@ -122,7 +137,11 @@ export const useStore = create<Store>()(
             { year: 2024, round: "①" },
             { year: 2023, round: "①" },
           ],
-          examDate: "2027-02-01", // 入試日の見本(残り日数・ペースの逆算を見せる)
+          // 受験日程の見本(今後の予定・逆算を見せる)
+          applyStart: "2027-01-10",
+          applyEnd: "2027-01-25",
+          examDate: "2027-02-01",
+          resultDate: "2027-02-03",
         };
         const a1: Attempt = { id: uuid(), schoolId: sc.id, year: 2025, round: "①", scores: { 国語: 98, 算数: 105, 理科: 62, 社会: 71 }, minPass: 322, memo: "", reviewed: true, sample: true };
         const a2: Attempt = { id: uuid(), schoolId: sc.id, year: 2024, round: "①", scores: { 国語: 92, 算数: 88, 理科: 55, 社会: 64 }, minPass: 315, memo: "算数で時間切れ", sample: true };

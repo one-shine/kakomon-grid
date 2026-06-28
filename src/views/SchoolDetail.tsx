@@ -10,7 +10,8 @@ import { PlanCard } from "@/components/ui/PlanCard";
 import { EffectCard } from "@/components/ui/EffectCard";
 import { TimetableCard } from "@/components/ui/TimetableCard";
 import { WeeklyTodoCard } from "@/components/ui/WeeklyTodoCard";
-import { buildGrid, buildGuidance, buildPace, buildEffect, subjectRates, weakestSubject, buildShareText, computeGap, findReference, type GapStatus } from "@/lib/logic";
+import { ScheduleCard } from "@/components/ui/ScheduleCard";
+import { buildGrid, buildGuidance, buildPace, buildEffect, nextMilestone, subjectRates, weakestSubject, buildShareText, computeGap, findReference, type GapStatus } from "@/lib/logic";
 import type { Attempt, School } from "@/lib/logic";
 
 const GAP_TEXT: Record<GapStatus, string> = {
@@ -55,6 +56,7 @@ export function SchoolDetail() {
   const todayISO = new Date().toISOString().slice(0, 10);
   const pace = buildPace(school, attempts, todayISO);
   const effect = buildEffect(school, attempts);
+  const nm = nextMilestone(school, todayISO);
   const rates = subjectRates(school, attempts);
   const anyRate = rates.some((r) => r.rate != null);
   const weak = weakestSubject(school, attempts);
@@ -73,7 +75,8 @@ export function SchoolDetail() {
   function share() {
     if (!school || !grid.length) return;
     const text = buildShareText(school, grid[0].attempt, grid[0].gap);
-    const url = location.origin + location.pathname;
+    // シェア経由の流入を計測できるよう UTM を付与(配信=拡散の代理指標。個人は追わない)。
+    const url = `${location.origin}${location.pathname}?utm_source=share&utm_medium=social`;
     if (navigator.share) {
       void navigator.share({ text, url }).catch(() => {});
       return;
@@ -112,7 +115,7 @@ export function SchoolDetail() {
     <div className="space-y-4">
       {/* 印刷時のみ出る:学校名＋グリッド＋出典(塾持参・壁貼り用)。タブ状態に依らず常にDOMに置く。 */}
       <div className="hidden print:block">
-        <div className="text-lg font-bold text-neutral-900">{school.name} 過去問グリッド</div>
+        <div className="text-lg font-bold text-neutral-900">{school.name} 過去問ノート</div>
         <div className="mb-3 text-xs text-neutral-500">出力日 {new Date().toLocaleDateString("ja-JP")}</div>
         {grid.length > 0 && <ScoreGrid school={school} attempts={attempts} />}
         {sourceNote}
@@ -148,10 +151,12 @@ export function SchoolDetail() {
         {/* ── いま:本番まで・見立て・効いているか ── */}
         {tab === "now" && (
           <div className="space-y-4">
-            {(pace.daysLeft != null || pace.remain > 0 || effect.done > 0) && (
+            {(nm != null || pace.remain > 0 || effect.done > 0) && (
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-sumi/[0.04] px-4 py-2.5 text-sm">
-                {pace.daysLeft != null && pace.daysLeft >= 0 && (
-                  <span className="text-sumi/80">本番まで <b className="nums text-sumi">{pace.daysLeft}</b>日</span>
+                {nm != null && (
+                  <span className={nm.days <= 7 ? "font-semibold text-shu" : "text-sumi/80"}>
+                    {nm.label}まで <b className="nums">{nm.days}</b>日
+                  </span>
                 )}
                 {pace.remain > 0 && (
                   <span className="text-sumi/70">
@@ -167,6 +172,7 @@ export function SchoolDetail() {
             <WeeklyTodoCard school={school} attempts={attempts} onFocusWeak={() => setTab("timetable")} />
             <GuidanceCard g={buildGuidance(school, attempts)} />
             {grid.length > 0 && <EffectCard e={effect} />}
+            <ScheduleCard school={school} todayISO={todayISO} />
           </div>
         )}
 

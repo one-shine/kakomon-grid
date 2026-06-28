@@ -11,7 +11,7 @@ export default function App() {
   const { view, schoolId, goHome, goDetail } = useNav();
   const { schools } = useStore();
 
-  const title = view === "home" ? "過去問グリッド" : schools.find((s) => s.id === schoolId)?.name ?? "過去問グリッド";
+  const title = view === "home" ? "中学受験 過去問ノート" : schools.find((s) => s.id === schoolId)?.name ?? "中学受験 過去問ノート";
 
   function back() {
     if (view === "attemptForm" && schoolId) goDetail(schoolId);

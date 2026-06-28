@@ -1,9 +1,10 @@
 import { useState } from "react";
+import { CalendarDays } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { useNav } from "@/store/useNav";
 import { useToast } from "@/store/useToast";
 import { Button } from "@/components/ui/button";
-import { latestGap, buildGuidance, type GapStatus, type GuidanceTone } from "@/lib/logic";
+import { latestGap, buildGuidance, upcomingAcrossSchools, type GapStatus, type GuidanceTone } from "@/lib/logic";
 
 const BAR: Record<GapStatus, string> = {
   PASS: "bg-emerald-500",
@@ -59,7 +60,7 @@ export function Home() {
             過去問は、<span className="relative whitespace-nowrap text-shu">伸び<span className="absolute -bottom-0.5 left-0 h-[3px] w-full rounded-full bg-shu/30" aria-hidden="true" /></span>を見るもの。
           </h1>
           <p className="mt-3 text-[15px] leading-relaxed text-sumi/70">
-            志望校×年度の得点と<b className="text-sumi">合格最低点との差</b>を、ひと目で。登録不要・端末内だけで完結。
+            <b className="text-sumi">中学受験の過去問</b>。志望校×年度の得点と<b className="text-sumi">合格最低点との差</b>を、ひと目で。登録不要・端末内だけで完結。
           </p>
         </div>
         <SamplePreview />
@@ -72,9 +73,39 @@ export function Home() {
   }
 
   const hasSample = schools.some((s) => s.sample);
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = upcomingAcrossSchools(schools, today, 5);
 
   return (
     <div className="space-y-3">
+      {/* 今後の予定:全併願校の締切・試験を日付順に=出願締切ジャグリングの解消 */}
+      {upcoming.length > 0 && (
+        <div className="rounded-2xl border border-line bg-card p-4 shadow-sm">
+          <div className="mb-2.5 flex items-center gap-1.5">
+            <CalendarDays size={15} className="text-brand" />
+            <span className="text-[11px] font-semibold tracking-[0.12em] text-sumi/55">今後の予定</span>
+          </div>
+          <div className="space-y-1.5">
+            {upcoming.map((m, i) => {
+              const [, mo, d] = m.date.split("-");
+              return (
+                <div key={i} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="flex items-baseline gap-2 truncate">
+                    <span className={`nums w-14 flex-none ${m.days <= 7 ? "font-bold text-shu" : "text-sumi/55"}`}>
+                      {m.days === 0 ? "今日" : `あと${m.days}日`}
+                    </span>
+                    <span className="truncate text-sumi/85">
+                      {m.schoolName} <span className="text-sumi/55">{m.label}</span>
+                    </span>
+                  </span>
+                  <span className="nums flex-none text-xs text-sumi/45">{Number(mo)}/{Number(d)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="space-y-2.5">
         {schools.map((sc) => {
           const lg = latestGap(sc, attempts);

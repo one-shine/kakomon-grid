@@ -13,10 +13,10 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg", "apple-touch-icon.png", "og-image.png"],
       manifest: {
-        name: "過去問グリッド — 中学受験の過去問スコア管理",
-        short_name: "過去問グリッド",
+        name: "中学受験 過去問ノート",
+        short_name: "過去問ノート",
         description:
-          "志望校×年度×科目の過去問得点と合格最低点の差をひと目に。端末内で完結。",
+          "中学受験の過去問の得点と合格最低点の差をひと目に。やる過去問の計画・学習時間割・出願日程まで。端末内で完結。",
         lang: "ja",
         display: "standalone",
         background_color: "#f4f1ea",

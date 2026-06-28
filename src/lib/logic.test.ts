@@ -362,6 +362,33 @@ describe("週の学習時間割(suggestTimetable)", () => {
   });
 });
 
+describe("受験日程(schoolMilestones / nextMilestone / upcomingAcrossSchools)", () => {
+  const A: School = { ...school4, name: "桜中", applyEnd: "2026-01-20", examDate: "2026-02-01", resultDate: "2026-02-03" };
+  const B: School = { ...school2, name: "光中", examDate: "2026-01-10" };
+  it("マイルストーンを日付順に返す", () => {
+    const ms = L.schoolMilestones(A, "2026-01-01");
+    expect(ms.map((m) => m.label)).toEqual(["出願締切", "試験日", "合格発表"]);
+    expect(ms[0].days).toBe(19);
+  });
+  it("nextMilestone は今日以降で最も近い", () => {
+    const nm = L.nextMilestone(A, "2026-01-25"); // 締切は過ぎ、次は試験日2/1
+    expect(nm?.label).toBe("試験日");
+  });
+  it("過ぎた日付は nextMilestone に出ない", () => {
+    expect(L.nextMilestone({ ...school2, examDate: "2026-01-01" }, "2026-06-01")).toBeNull();
+  });
+  it("全校横断の今後の予定を日付順に", () => {
+    const up = L.upcomingAcrossSchools([A, B], "2026-01-01");
+    expect(up[0].schoolName).toBe("光中"); // 1/10 が最も近い
+    expect(up[0].label).toBe("試験日");
+  });
+  it("migrateState が受験日程を保持", () => {
+    const m = L.migrateState({ schools: [{ id: "x", name: "A", subjects: [{ name: "国", max: 100 }], applyEnd: "2026-01-20", admissionsUrl: "https://e.jp" }], attempts: [] });
+    expect(m.schools[0].applyEnd).toBe("2026-01-20");
+    expect(m.schools[0].admissionsUrl).toBe("https://e.jp");
+  });
+});
+
 describe("今週やること(buildWeeklyTodo)", () => {
   const sc: School = { ...school4, plan: [{ year: 2025, round: "①" }, { year: 2024, round: "①" }] };
   const doneUnrev: Attempt = { id: "d1", schoolId: "sc1", year: 2025, round: "①", scores: { 国語: 100, 算数: 120, 理科: 30, 社会: 60 }, minPass: 320, memo: "" };

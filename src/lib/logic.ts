@@ -1,4 +1,4 @@
-// 過去問グリッド 純粋ロジック(DOM/storage非依存=テスト可能)。
+// 中学受験 過去問ノート 純粋ロジック(DOM/storage非依存=テスト可能)。
 // vanilla版(apps/kakomon-grid/logic.js, テスト49本)を TypeScript(strict) へ移植。
 // 親が入力する得点のみを扱い、子どもの個人情報は持たない。
 
@@ -35,8 +35,12 @@ export interface School {
   subjects: Subject[];
   // やる過去問の計画(年度×回のコマ)。記録するとそのコマが「済」になる。
   plan?: PlanSlot[];
-  // 入試日(任意・YYYY-MM-DD)。残り日数とペースの逆算に使う。
-  examDate?: string;
+  // 受験日程(任意・YYYY-MM-DD)。親が登録し、締切・本番までの逆算と今後の予定に使う。
+  applyStart?: string; // 出願開始
+  applyEnd?: string; // 出願締切
+  examDate?: string; // 試験日(残り日数とペースの逆算にも使う)
+  resultDate?: string; // 合格発表
+  admissionsUrl?: string; // 公式の入試情報・出願ページ(情報はホストせずリンクで解く)
   // 週の学習時間割(7日×3コマの科目ラベル)。過去問の弱点から自動提案し親が微調整する。
   timetable?: string[][];
   // 同梱の学校データから取り込んだ参考情報(任意)。手入力校では undefined。
@@ -276,6 +280,44 @@ export function daysUntil(dateISO: string | undefined, todayISO: string): number
   const t = Date.parse(`${todayISO}T00:00:00`);
   if (Number.isNaN(d) || Number.isNaN(t)) return null;
   return Math.round((d - t) / 86400000);
+}
+
+// 受験日程のマイルストーン。出願開始→締切→試験日→合格発表 の4点。
+export interface Milestone {
+  kind: string;
+  label: string;
+  date: string;
+  days: number; // todayからの残り日数(負=過ぎた)
+}
+const SCHEDULE_FIELDS: { key: "applyStart" | "applyEnd" | "examDate" | "resultDate"; label: string }[] = [
+  { key: "applyStart", label: "出願開始" },
+  { key: "applyEnd", label: "出願締切" },
+  { key: "examDate", label: "試験日" },
+  { key: "resultDate", label: "合格発表" },
+];
+
+export function schoolMilestones(school: School, todayISO: string): Milestone[] {
+  const out: Milestone[] = [];
+  for (const f of SCHEDULE_FIELDS) {
+    const d = school[f.key];
+    if (!d) continue;
+    const days = daysUntil(d, todayISO);
+    if (days == null) continue;
+    out.push({ kind: f.key, label: f.label, date: d, days });
+  }
+  return out.sort((a, b) => a.days - b.days);
+}
+
+// 次に迫る予定(今日以降で最も近い)。状況ストリップの主役。
+export function nextMilestone(school: School, todayISO: string): Milestone | null {
+  return schoolMilestones(school, todayISO).find((m) => m.days >= 0) ?? null;
+}
+
+// 全校横断の今後の予定(締切・試験を日付順)。併願校の締切ジャグリングを解消する。
+export function upcomingAcrossSchools(schools: School[], todayISO: string, limit = 6): (Milestone & { schoolName: string })[] {
+  const all: (Milestone & { schoolName: string })[] = [];
+  for (const s of schools) for (const m of schoolMilestones(s, todayISO)) if (m.days >= 0) all.push({ ...m, schoolName: s.name });
+  return all.sort((a, b) => a.days - b.days).slice(0, limit);
 }
 
 export interface Pace {
@@ -654,7 +696,11 @@ export function migrateState(raw: unknown): AppState {
               .map((p) => ({ year: Number(p.year), round: p.round ? String(p.round) : "" })),
           }
         : {}),
+      ...(s.applyStart ? { applyStart: String(s.applyStart) } : {}),
+      ...(s.applyEnd ? { applyEnd: String(s.applyEnd) } : {}),
       ...(s.examDate ? { examDate: String(s.examDate) } : {}),
+      ...(s.resultDate ? { resultDate: String(s.resultDate) } : {}),
+      ...(s.admissionsUrl ? { admissionsUrl: String(s.admissionsUrl) } : {}),
       ...(Array.isArray(s.timetable) && s.timetable.length === WEEK_DAYS.length
         ? {
             timetable: s.timetable.map((row) =>

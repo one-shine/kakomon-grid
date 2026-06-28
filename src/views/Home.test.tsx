@@ -18,7 +18,8 @@ describe("<Home>", () => {
     render(<Home />);
     fireEvent.click(screen.getByText("サンプルで試す"));
     expect(useStore.getState().schools.length).toBeGreaterThan(0);
-    expect(screen.getByText(/見本中学校/)).toBeInTheDocument();
+    // サンプルは一覧＋「今後の予定」の両方に出る(受験日程の見本を入れたため)
+    expect(screen.getAllByText(/見本中学校/).length).toBeGreaterThan(0);
   });
 
   it("学校があるときは追加ボタンを出す", () => {

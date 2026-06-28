@@ -10,11 +10,15 @@ export function SchoolForm() {
   const { schoolId } = useNav();
   const nav = useNav();
   const toast = useToast();
-  const { schools, addSchool, addSchoolFull, updateSchool, removeSchool, setExamDate } = useStore();
+  const { schools, addSchool, addSchoolFull, updateSchool, removeSchool, updateSchoolMeta } = useStore();
   const editing = schoolId ? schools.find((s) => s.id === schoolId) ?? null : null;
 
   const [name, setName] = useState(editing?.name ?? "");
+  const [applyStart, setApplyStart] = useState(editing?.applyStart ?? "");
+  const [applyEnd, setApplyEnd] = useState(editing?.applyEnd ?? "");
   const [examDate, setExamDateLocal] = useState(editing?.examDate ?? "");
+  const [resultDate, setResultDate] = useState(editing?.resultDate ?? "");
+  const [admissionsUrl, setAdmissionsUrl] = useState(editing?.admissionsUrl ?? "");
   const [subjects, setSubjects] = useState<Subject[]>(
     editing ? editing.subjects.map((s) => ({ ...s })) : SUBJECT_PRESETS[0].subjects.map((s) => ({ ...s })),
   );
@@ -51,6 +55,7 @@ export function SchoolForm() {
     setPresetId("custom");
     setReference(c.reference.map((r) => ({ ...r })));
     setSource(c.source);
+    if (c.source?.url && !admissionsUrl) setAdmissionsUrl(c.source.url); // 公式入試情報リンクの初期値
   }
 
   function save() {
@@ -68,7 +73,7 @@ export function SchoolForm() {
       // カタログから選んだ場合は出典(公式リンク)を必ず保持。手入力は素のまま。
       id = picked ? addSchoolFull({ ...draft, reference: reference ?? [], source }) : addSchool(draft.name, draft.subjects);
     }
-    setExamDate(id, examDate); // 入試日(空なら解除)
+    updateSchoolMeta(id, { applyStart, applyEnd, examDate, resultDate, admissionsUrl: admissionsUrl.trim() });
     nav.goDetail(id);
     toast.show("保存しました");
   }
@@ -116,12 +121,32 @@ export function SchoolForm() {
         />
       </Field>
 
-      <Field label="入試日(任意・残り日数とペースの逆算に使う)">
+      <div>
+        <span className="mb-1.5 block text-xs text-neutral-500">受験日程(任意・今後の予定と逆算に使う)</span>
+        <div className="grid grid-cols-2 gap-2.5">
+          <Field label="出願開始">
+            <input className={inputCls} type="date" value={applyStart} onChange={(e) => setApplyStart(e.target.value)} />
+          </Field>
+          <Field label="出願締切">
+            <input className={inputCls} type="date" value={applyEnd} onChange={(e) => setApplyEnd(e.target.value)} />
+          </Field>
+          <Field label="試験日">
+            <input className={inputCls} type="date" value={examDate} onChange={(e) => setExamDateLocal(e.target.value)} />
+          </Field>
+          <Field label="合格発表">
+            <input className={inputCls} type="date" value={resultDate} onChange={(e) => setResultDate(e.target.value)} />
+          </Field>
+        </div>
+      </div>
+
+      <Field label="公式の入試情報・出願ページ(任意)">
         <input
           className={inputCls}
-          type="date"
-          value={examDate}
-          onChange={(e) => setExamDateLocal(e.target.value)}
+          type="url"
+          inputMode="url"
+          placeholder="https://… 各校公式"
+          value={admissionsUrl}
+          onChange={(e) => setAdmissionsUrl(e.target.value)}
         />
       </Field>
 
